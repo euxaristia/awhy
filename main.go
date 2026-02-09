@@ -171,7 +171,7 @@ func checkHardenedKernel() Result {
 		version = strings.TrimSpace(string(out))
 		lowerVersion := strings.ToLower(version)
 		if strings.Contains(lowerVersion, "hardened") {
-			subInfo = append(subInfo, fmt.Sprintf("Kernel version string contains 'hardened': %s", version))
+			subInfo = append(subInfo, fmt.Sprintf("Kernel version string contains 'hardened' (+2 points): %s", version))
 			score += 2
 		} else if strings.Contains(lowerVersion, "lts") {
 			subInfo = append(subInfo, fmt.Sprintf("Kernel version indicates LTS: %s", version))
@@ -204,7 +204,7 @@ func checkHardenedKernel() Result {
 				if arg == key || (strings.Contains(key, "=") && arg == key) || (!strings.Contains(key, "=") && strings.Contains(arg, key)) {
 					// Simple matching for now, can be improved
 					if arg == key {
-						subInfo = append(subInfo, fmt.Sprintf("Boot parameter found: %s (%s)", arg, desc))
+						subInfo = append(subInfo, fmt.Sprintf("Boot parameter found (+1 point): %s (%s)", arg, desc))
 						score += 1
 					}
 				}
@@ -218,10 +218,10 @@ func checkHardenedKernel() Result {
 		lockdownContent := string(lockdownBytes)
 		// Format is usually [none] integrity confidentiality or similar, with [] around active
 		if strings.Contains(lockdownContent, "[integrity]") {
-			subInfo = append(subInfo, "Lockdown mode enabled: integrity")
+			subInfo = append(subInfo, "Lockdown mode enabled (+2 points): integrity")
 			score += 2
 		} else if strings.Contains(lockdownContent, "[confidentiality]") {
-			subInfo = append(subInfo, "Lockdown mode enabled: confidentiality")
+			subInfo = append(subInfo, "Lockdown mode enabled (+3 points): confidentiality")
 			score += 3
 		}
 	}
@@ -229,11 +229,11 @@ func checkHardenedKernel() Result {
 	// Check 4: Specific Hardening Sysctls (PaX/Grsecurity legacy or modern equivalents)
 	// Just checking existence for now as a strong signal
 	if _, err := os.Stat("/proc/sys/kernel/pax"); err == nil {
-		subInfo = append(subInfo, "PaX sysctl directory detected")
+		subInfo = append(subInfo, "PaX sysctl directory detected (+5 points)")
 		score += 5
 	}
 	if _, err := os.Stat("/proc/sys/kernel/grsecurity"); err == nil {
-		subInfo = append(subInfo, "Grsecurity sysctl directory detected")
+		subInfo = append(subInfo, "Grsecurity sysctl directory detected (+5 points)")
 		score += 5
 	}
 
