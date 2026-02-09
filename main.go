@@ -96,6 +96,24 @@ func printHeader() {
 
 func sortAndPrintResults(results []Result) {
 	sort.Slice(results, func(i, j int) bool {
+		// High priority items (NSA SELinux and AppArmor) go to the very top
+		getPriority := func(r Result) int {
+			if r.Description == "NSA SELinux" {
+				return 0
+			}
+			if r.Description == "AppArmor" {
+				return 1
+			}
+			return 2
+		}
+
+		pi := getPriority(results[i])
+		pj := getPriority(results[j])
+
+		if pi != pj {
+			return pi < pj
+		}
+
 		if results[i].SortWeight != results[j].SortWeight {
 			return results[i].SortWeight < results[j].SortWeight
 		}
@@ -137,7 +155,7 @@ func getSysctlResult(path string, expected string, description string, mapping m
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
 		status := "Could not read " + path
-		if os.IsPermission(err) {
+		if isPermissionDenied(err) {
 			status = "Requires root"
 		}
 		return Result{"[-]", description, status, ColorRed, 2, nil}
@@ -261,7 +279,7 @@ func checkHardenedKernel(config map[string]string, configErr error) Result {
 		}
 	} else {
 		msg := "Kernel config unavailable for analysis (/proc/config.gz missing)"
-		if configErr != nil && os.IsPermission(configErr) {
+		if configErr != nil && isPermissionDenied(configErr) {
 			msg = "Kernel config analysis requires root privileges"
 		}
 		subInfo = append(subInfo, msg)
@@ -339,18 +357,18 @@ func checkSELinux() Result {
 		content, err := ioutil.ReadFile("/sys/fs/selinux/enforce")
 		if err != nil {
 			status := "Present"
-			if os.IsPermission(err) {
+			if isPermissionDenied(err) {
 				status = "Requires root"
 			}
-			return Result{"[+]", "SELinux", status, ColorGreen, 0, nil}
+			return Result{"[+]", "NSA SELinux", status, ColorGreen, 0, nil}
 		}
 		if strings.TrimSpace(string(content)) == "1" {
-			return Result{"[+]", "SELinux", "Enabled (Enforcing)", ColorGreen, 0, nil}
+			return Result{"[+]", "NSA SELinux", "Enabled (Enforcing)", ColorGreen, 0, nil}
 		} else {
-			return Result{"[!]", "SELinux", "Enabled (Permissive)", ColorYellow, 1, nil}
+			return Result{"[!]", "NSA SELinux", "Enabled (Permissive)", ColorYellow, 1, nil}
 		}
 	}
-	return Result{"[-]", "SELinux", "Not found", ColorRed, 2, nil}
+	return Result{"[-]", "NSA SELinux", "Not found", ColorRed, 2, nil}
 }
 
 func checkAppArmor() Result {
@@ -359,7 +377,7 @@ func checkAppArmor() Result {
 		content, err := ioutil.ReadFile("/sys/module/apparmor/parameters/enabled")
 		if err != nil {
 			status := "Present"
-			if os.IsPermission(err) {
+			if isPermissionDenied(err) {
 				status = "Requires root"
 			}
 			return Result{"[!]", "AppArmor", status, ColorYellow, 1, nil}
@@ -378,7 +396,7 @@ func checkKernelConfig(found map[string]string, configErr error) {
 		fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
 		fmt.Println("-------------------------------")
 		status := "Could not read /proc/config.gz"
-		if configErr != nil && os.IsPermission(configErr) {
+		if configErr != nil && isPermissionDenied(configErr) {
 			status = "Requires root"
 		}
 		fmt.Printf("%s[-] %-40s: %s%s\n", ColorRed, "Kernel Config Checks", status, ColorReset)
@@ -390,13 +408,13 @@ func checkKernelConfig(found map[string]string, configErr error) {
 		"CONFIG_RANDOMIZE_KSTACK_OFFSET_ALL": "y",
 		"CONFIG_INIT_ON_ALLOC_DEFAULT_ON":    "y",
 		"CONFIG_INIT_ON_FREE_DEFAULT_ON":     "y",
+		"CONFIG_LEGACY_VSYSCALL_NONE":        "y",
 		"CONFIG_HARDENED_USERCOPY":           "y",
 		"CONFIG_FORTIFY_SOURCE":              "y",
 		"CONFIG_SLAB_FREELIST_RANDOM":        "y",
 		"CONFIG_SLAB_FREELIST_HARDENED":      "y",
 		"CONFIG_PAGE_TABLE_ISOLATION":        "y",
 		"CONFIG_RETPOLINE":                   "y",
-		"CONFIG_LEGACY_VSYSCALL_NONE":        "y",
 		"CONFIG_STRICT_KERNEL_RWX":           "y",
 		"CONFIG_STRICT_MODULE_RWX":           "y",
 	}
@@ -426,7 +444,7 @@ func checkSecureBoot() Result {
 			return Result{"[-]", "Secure Boot", "Not available (Legacy BIOS?)", ColorRed, 2, nil}
 		}
 		status := "Unknown (Could not read efivar)"
-		if os.IsPermission(err) {
+		if isPermissionDenied(err) {
 			status = "Requires root"
 		}
 		return Result{"[?]", "Secure Boot", status, ColorYellow, 1, nil}

@@ -50,18 +50,14 @@ Run the tool to audit your system:
 ## 📊 Example Output
 
 ```text
-[+] ASLR                                    : Full (2)
-[!] Hardened Kernel                         : Partial (5% Hardened)
-   ├── Kernel: 6.17.13-2-cachyos-hardened-lto
-   ├── Confidence Score: 1/20 points (5%)
-   ├── Score is based on real-time boot parameters and kernel security features.
-   ├── Hardening parameter: pti=on (Enables Kernel Page Table Isolation (+1))
-   ├── Hardening parameter: page_alloc.shuffle=1 (Randomizes page allocator (+1))
-   └── Lockdown mode explicitly disabled (-1 point)
-[+] Kernel Pointer Restrict                 : Hides for all (2)
-...
+[-] NSA SELinux                             : Not found
 [-] AppArmor                                : Not found
-[-] SELinux                                 : Not found
+[+] ASLR                                    : Full (2)
+[+] Hardened Kernel                         : Yes (50% Hardened)
+   ├── Kernel: 6.17.13-2-cachyos-hardened-lto
+   ├── Confidence Score: 15/30 points (50%)
+   ├── Score accounts for both boot parameters and compiled-in kernel defaults.
+...
 ```
 
 ## 🛠️ Contributing
