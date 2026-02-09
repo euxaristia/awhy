@@ -51,7 +51,10 @@ Run the tool to audit your system:
 
 ```text
 [+] ASLR                                    : Enabled (2)
-[+] Hardened Kernel                         : Yes (6.17.13-2-cachyos-hardened-lto)
+[+] Hardened Kernel                         : Yes (Score: 4)
+   ├── Kernel version string contains 'hardened': 6.17.13-2-cachyos-hardened-lto
+   ├── Boot parameter found: pti=on (Enables Kernel Page Table Isolation)
+   └── Boot parameter found: page_alloc.shuffle=1 (Randomizes page allocator)
 [+] Kernel Pointer Restrict                 : Enabled (2)
 ...
 [-] AppArmor                                : Not found

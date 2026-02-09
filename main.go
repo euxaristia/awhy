@@ -27,7 +27,8 @@ type Result struct {
 	Description string
 	Status      string
 	Color       string
-	SortWeight  int // 0 for [+], 1 for [!], 2 for [-]
+	SortWeight  int      // 0 for [+], 1 for [!], 2 for [-]
+	SubInfo     []string // Additional details to display
 }
 
 func main() {
@@ -44,7 +45,7 @@ func main() {
 	}
 
 	var generalResults []Result
-	generalResults = append(generalResults, checkKernelName())
+	generalResults = append(generalResults, checkHardenedKernel())
 	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/randomize_va_space", "2", "ASLR"))
 	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/kptr_restrict", "2", "Kernel Pointer Restrict"))
 	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/dmesg_restrict", "1", "dmesg Restrict"))
@@ -104,33 +105,147 @@ func sortAndPrintResults(results []Result) {
 
 	for _, r := range results {
 		fmt.Printf("%s%s %-40s: %s%s\n", r.Color, r.Prefix, r.Description, r.Status, ColorReset)
+		for i, info := range r.SubInfo {
+			connector := "├──"
+			if i == len(r.SubInfo)-1 {
+				connector = "└──"
+			}
+			fmt.Printf("   %s %s\n", connector, info)
+		}
 	}
 }
 
 func getFileValueResult(path string, expected string, description string) Result {
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
-		return Result{"[-]", description, "Could not read " + path, ColorRed, 2}
+		return Result{"[-]", description, "Could not read " + path, ColorRed, 2, nil}
 	}
 	val := strings.TrimSpace(string(content))
 	if val == expected {
-		return Result{"[+]", description, "Enabled (" + val + ")", ColorGreen, 0}
+		return Result{"[+]", description, "Enabled (" + val + ")", ColorGreen, 0, nil}
 	} else {
-		return Result{"[!]", description, "Disabled or weak (" + val + ")", ColorYellow, 1}
+		return Result{"[!]", description, "Disabled or weak (" + val + ")", ColorYellow, 1, nil}
 	}
 }
 
-func checkKernelName() Result {
+func checkHardenedKernel() Result {
+	var subInfo []string
+	score := 0 // Higher is better
+
+	// Check 1: Kernel Name
 	out, err := exec.Command("uname", "-r").Output()
+	version := ""
 	if err == nil {
-		version := strings.ToLower(string(out))
-		if strings.Contains(version, "hardened") {
-			return Result{"[+]", "Hardened Kernel", "Yes (" + strings.TrimSpace(string(out)) + ")", ColorGreen, 0}
-		} else {
-			return Result{"[-]", "Hardened Kernel", "No (Standard kernel)", ColorRed, 2}
+		version = strings.TrimSpace(string(out))
+		lowerVersion := strings.ToLower(version)
+		if strings.Contains(lowerVersion, "hardened") {
+			subInfo = append(subInfo, fmt.Sprintf("Kernel version string contains 'hardened': %s", version))
+			score += 2
+		} else if strings.Contains(lowerVersion, "lts") {
+			subInfo = append(subInfo, fmt.Sprintf("Kernel version indicates LTS: %s", version))
 		}
 	}
-	return Result{"[-]", "Hardened Kernel", "Unknown", ColorRed, 2}
+
+	// Check 2: Kernel Command Line Arguments
+	cmdlineBytes, err := ioutil.ReadFile("/proc/cmdline")
+	if err == nil {
+		cmdline := string(cmdlineBytes)
+		args := strings.Fields(cmdline)
+		
+		importantArgs := map[string]string{
+			"slab_nomerge":            "Disables merging of slab caches",
+			"slub_debug=FZP":          "Enables sanity checks for SLUB",
+			"init_on_alloc=1":         "Zeroes memory on allocation",
+			"init_on_free=1":          "Zeroes memory on free",
+			"page_alloc.shuffle=1":    "Randomizes page allocator",
+			"pti=on":                  "Enables Kernel Page Table Isolation",
+			"randomize_kstack_offset=on": "Randomizes kernel stack offset",
+			"vsyscall=none":           "Disables legacy vsyscalls",
+			"debugfs=off":             "Disables debugfs",
+			"oops=panic":              "Panics on oops",
+			"lockdown=confidentiality": "Enables lockdown mode (confidentiality)",
+			"lockdown=integrity":       "Enables lockdown mode (integrity)",
+		}
+
+		for _, arg := range args {
+			for key, desc := range importantArgs {
+				if arg == key || (strings.Contains(key, "=") && arg == key) || (!strings.Contains(key, "=") && strings.Contains(arg, key)) {
+					// Simple matching for now, can be improved
+					if arg == key {
+						subInfo = append(subInfo, fmt.Sprintf("Boot parameter found: %s (%s)", arg, desc))
+						score += 1
+					}
+				}
+			}
+		}
+	}
+
+	// Check 3: Lockdown Mode (Direct check)
+	lockdownBytes, err := ioutil.ReadFile("/sys/kernel/security/lockdown")
+	if err == nil {
+		lockdownContent := string(lockdownBytes)
+		// Format is usually [none] integrity confidentiality or similar, with [] around active
+		if strings.Contains(lockdownContent, "[integrity]") {
+			subInfo = append(subInfo, "Lockdown mode enabled: integrity")
+			score += 2
+		} else if strings.Contains(lockdownContent, "[confidentiality]") {
+			subInfo = append(subInfo, "Lockdown mode enabled: confidentiality")
+			score += 3
+		}
+	}
+
+	// Check 4: Specific Hardening Sysctls (PaX/Grsecurity legacy or modern equivalents)
+	// Just checking existence for now as a strong signal
+	if _, err := os.Stat("/proc/sys/kernel/pax"); err == nil {
+		subInfo = append(subInfo, "PaX sysctl directory detected")
+		score += 5
+	}
+	if _, err := os.Stat("/proc/sys/kernel/grsecurity"); err == nil {
+		subInfo = append(subInfo, "Grsecurity sysctl directory detected")
+		score += 5
+	}
+
+	// Determine Result
+	status := "No (Standard kernel)"
+	color := ColorRed
+	weight := 2
+
+	if score >= 2 {
+		status = fmt.Sprintf("Yes (Score: %d)", score)
+		color = ColorGreen
+		weight = 0
+	} else if score > 0 {
+		status = fmt.Sprintf("Partial (Score: %d)", score)
+		color = ColorYellow
+		weight = 1
+	}
+
+	// If score is low but we detected standard kernel, might just be standard.
+	// But if we found *some* evidence, list it.
+
+	if len(subInfo) == 0 {
+		return Result{"[-]", "Hardened Kernel", status, color, weight, nil}
+	}
+
+	return Result{
+		Prefix:      getPrefix(weight),
+		Description: "Hardened Kernel",
+		Status:      status,
+		Color:       color,
+		SortWeight:  weight,
+		SubInfo:     subInfo,
+	}
+}
+
+func getPrefix(weight int) string {
+	switch weight {
+	case 0:
+		return "[+]"
+	case 1:
+		return "[!]"
+	default:
+		return "[-]"
+	}
 }
 
 func checkSELinux() Result {
@@ -139,14 +254,14 @@ func checkSELinux() Result {
 		content, err := ioutil.ReadFile("/sys/fs/selinux/enforce")
 		if err == nil {
 			if strings.TrimSpace(string(content)) == "1" {
-				return Result{"[+]", "SELinux", "Enabled (Enforcing)", ColorGreen, 0}
+				return Result{"[+]", "SELinux", "Enabled (Enforcing)", ColorGreen, 0, nil}
 			} else {
-				return Result{"[!]", "SELinux", "Enabled (Permissive)", ColorYellow, 1}
+				return Result{"[!]", "SELinux", "Enabled (Permissive)", ColorYellow, 1, nil}
 			}
 		}
-		return Result{"[+]", "SELinux", "Present", ColorGreen, 0}
+		return Result{"[+]", "SELinux", "Present", ColorGreen, 0, nil}
 	}
-	return Result{"[-]", "SELinux", "Not found", ColorRed, 2}
+	return Result{"[-]", "SELinux", "Not found", ColorRed, 2, nil}
 }
 
 func checkAppArmor() Result {
@@ -154,12 +269,12 @@ func checkAppArmor() Result {
 	if err == nil {
 		content, err := ioutil.ReadFile("/sys/module/apparmor/parameters/enabled")
 		if err == nil && strings.TrimSpace(string(content)) == "Y" {
-			return Result{"[+]", "AppArmor", "Enabled", ColorGreen, 0}
+			return Result{"[+]", "AppArmor", "Enabled", ColorGreen, 0, nil}
 		} else {
-			return Result{"[!]", "AppArmor", "Present but disabled", ColorYellow, 1}
+			return Result{"[!]", "AppArmor", "Present but disabled", ColorYellow, 1, nil}
 		}
 	}
-	return Result{"[-]", "AppArmor", "Not found", ColorRed, 2}
+	return Result{"[-]", "AppArmor", "Not found", ColorRed, 2, nil}
 }
 
 func checkKernelConfig() {
@@ -207,11 +322,11 @@ func checkKernelConfig() {
 	for cfg, expected := range configs {
 		val, ok := found[cfg]
 		if ok && val == expected {
-			results = append(results, Result{"[+]", cfg, "Enabled (" + val + ")", ColorGreen, 0})
+			results = append(results, Result{"[+]", cfg, "Enabled (" + val + ")", ColorGreen, 0, nil})
 		} else if ok {
-			results = append(results, Result{"[!]", cfg, "Disabled or different (" + val + ")", ColorYellow, 1})
+			results = append(results, Result{"[!]", cfg, "Disabled or different (" + val + ")", ColorYellow, 1, nil})
 		} else {
-			results = append(results, Result{"[-]", cfg, "Not set", ColorRed, 2})
+			results = append(results, Result{"[-]", cfg, "Not set", ColorRed, 2, nil})
 		}
 	}
 
