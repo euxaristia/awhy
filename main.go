@@ -128,15 +128,15 @@ func sortAndPrintResults(results []Result) {
 			case "ASLR":
 				return 1
 			case "BPF JIT Hardening":
-				return 10
-			case "Landlock LSM":
 				return 11
-			case "Lockdown LSM":
+			case "Landlock LSM":
 				return 12
-			case "NSA SELinux":
+			case "Lockdown LSM":
 				return 13
-			case "AppArmor":
+			case "NSA SELinux":
 				return 14
+			case "AppArmor":
+				return 15
 			case "GNOME HSI":
 				return 20
 			case "Secure Boot":

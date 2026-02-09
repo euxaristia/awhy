@@ -64,6 +64,27 @@ Run the tool to audit your system:
 [-] Secure Boot                             : Disabled
 ```
 
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+go test -v ./...
+```
+
+To generate a coverage report:
+
+```bash
+# Per-function coverage summary
+go test -coverprofile=coverage.out ./...
+go tool cover -func=coverage.out
+
+# Visual HTML report (opens in browser, highlights tested/untested lines)
+go tool cover -html=coverage.out
+```
+
+The `-coverprofile=FILE` flag records which lines of code are exercised by tests. Use `go tool cover -func` for a quick per-function breakdown, or `-html` for an interactive view that color-codes every line red (untested) or green (tested).
+
 ## 🛠️ Contributing
 
 Contributions are welcome! If you have ideas for new security checks or improvements to the UI, feel free to:
@@ -76,7 +97,7 @@ Contributions are welcome! If you have ideas for new security checks or improvem
 
 ## 📄 License
 
-Distributed under the MIT License. See `LICENSE` (if added) or the source code for more information.
+This project is not yet licensed. All rights are reserved by the author until a license is chosen.
 
 ---
-*Stay Hardened!* 🛡️
+*Stay Hard!* 🛡️
