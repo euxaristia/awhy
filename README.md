@@ -50,13 +50,14 @@ Run the tool to audit your system:
 ## 📊 Example Output
 
 ```text
-[-] NSA SELinux                             : Not found
-[-] AppArmor                                : Not found
-[+] ASLR                                    : Full (2)
 [+] Hardened Kernel                         : Yes (50% Hardened)
    ├── Kernel: 6.17.13-2-cachyos-hardened-lto
    ├── Confidence Score: 15/30 points (50%)
    ├── Score accounts for both boot parameters and compiled-in kernel defaults.
+...
+[+] ASLR                                    : Full (2)
+[-] NSA SELinux                             : Not found
+[-] AppArmor                                : Not found
 ...
 ```
 

@@ -96,15 +96,20 @@ func printHeader() {
 
 func sortAndPrintResults(results []Result) {
 	sort.Slice(results, func(i, j int) bool {
-		// High priority items (NSA SELinux and AppArmor) go to the very top
+		// Absolute priority items
 		getPriority := func(r Result) int {
-			if r.Description == "NSA SELinux" {
+			switch r.Description {
+			case "Hardened Kernel":
 				return 0
-			}
-			if r.Description == "AppArmor" {
+			case "ASLR":
 				return 1
+			case "NSA SELinux":
+				return 2
+			case "AppArmor":
+				return 3
+			default:
+				return 4
 			}
-			return 2
 		}
 
 		pi := getPriority(results[i])
