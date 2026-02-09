@@ -46,6 +46,9 @@ func main() {
 
 	var generalResults []Result
 	generalResults = append(generalResults, checkHardenedKernel())
+	generalResults = append(generalResults, checkSecureBoot())
+	generalResults = append(generalResults, checkKernelTaint())
+	generalResults = append(generalResults, checkGnomeHSI())
 
 	aslrMap := map[string]string{"0": "Disabled", "1": "Conservative", "2": "Full"}
 	generalResults = append(generalResults, getSysctlResult("/proc/sys/kernel/randomize_va_space", "2", "ASLR", aslrMap))
@@ -408,4 +411,103 @@ func checkKernelConfig() {
 	fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
 	fmt.Println("-------------------------------")
 	sortAndPrintResults(results)
+}
+
+func checkSecureBoot() Result {
+	path := "/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c"
+	data, err := ioutil.ReadFile(path)
+	if err != nil {
+		if _, err := os.Stat("/sys/firmware/efi"); os.IsNotExist(err) {
+			return Result{"[-]", "Secure Boot", "Not available (Legacy BIOS?)", ColorRed, 2, nil}
+		}
+		// Try to read /sys/kernel/security/securelevel or similar on some systems, but efivars is standard.
+		return Result{"[?]", "Secure Boot", "Unknown (Could not read efivar)", ColorYellow, 1, nil}
+	}
+	// First 4 bytes are attributes, 5th byte is value.
+	if len(data) >= 5 && data[4] == 1 {
+		return Result{"[+]", "Secure Boot", "Enabled", ColorGreen, 0, nil}
+	}
+	return Result{"[-]", "Secure Boot", "Disabled", ColorRed, 2, nil}
+}
+
+func checkKernelTaint() Result {
+	content, err := ioutil.ReadFile("/proc/sys/kernel/tainted")
+	if err != nil {
+		return Result{"[?]", "Kernel Integrity", "Unknown (Could not read /proc/sys/kernel/tainted)", ColorRed, 2, nil}
+	}
+
+	var val int
+	fmt.Sscanf(strings.TrimSpace(string(content)), "%d", &val)
+
+	if val == 0 {
+		return Result{"[+]", "Kernel Integrity", "Untainted", ColorGreen, 0, nil}
+	}
+
+	var subInfo []string
+	taintBits := map[int]string{
+		0:  "Proprietary module has been loaded (P)",
+		1:  "Module has been forcibly loaded (F)",
+		2:  "SMP with CPUs not designed for SMP (S)",
+		3:  "Module was forcibly unloaded (R)",
+		4:  "Machine Check Exception occurred (M)",
+		5:  "Bad page referenced or some unexpected page flags (B)",
+		6:  "Taint requested by userspace application (U)",
+		7:  "Kernel died recently (OOPS or BUG) (D)",
+		8:  "ACPI table overridden (A)",
+		9:  "Kernel warning has occurred (W)",
+		10: "Staging driver has been loaded (C)",
+		11: "Workaround for bug in platform firmware applied (I)",
+		12: "Externally-built ('out-of-tree') module has been loaded (O)",
+		13: "Unsigned module has been loaded (E)",
+		14: "Soft-lockup has occurred (L)",
+		15: "Kernel has been live patched (K)",
+		16: "Auxiliary taint, defined for and used by distros (X)",
+		17: "Kernel was built with the struct randomization plugin (T)",
+	}
+
+	for bit, desc := range taintBits {
+		if (val & (1 << bit)) != 0 {
+			subInfo = append(subInfo, desc)
+		}
+	}
+
+	// Check for common tainting modules
+	modulesBytes, err := ioutil.ReadFile("/proc/modules")
+	if err == nil {
+		lines := strings.Split(string(modulesBytes), "\n")
+		for _, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) > 0 {
+				modName := fields[0]
+				// Check for known proprietary/out-of-tree modules
+				if modName == "nvidia" || modName == "nvidia_drm" || modName == "vboxdrv" || modName == "zfs" || modName == "wl" {
+					subInfo = append(subInfo, fmt.Sprintf("Potential taint source detected: %s", modName))
+				}
+			}
+		}
+	}
+
+	return Result{
+		Prefix:      "[!]",
+		Description: "Kernel Integrity",
+		Status:      fmt.Sprintf("Tainted (Value: %d)", val),
+		Color:       ColorYellow,
+		SortWeight:  1,
+		SubInfo:     subInfo,
+	}
+}
+
+func checkGnomeHSI() Result {
+	// 1. Try fwupdtool
+	path, err := exec.LookPath("fwupdtool")
+	if err == nil {
+		// Just checking existence for now as running it might fail or require dbus
+		return Result{"[?]", "GNOME HSI", "Tool found but not implemented", ColorYellow, 1, []string{"fwupdtool is present at " + path}}
+	}
+
+	// 2. Check for HSI attributes in /sys/class/dmi/id (rough proxy)
+	// Real HSI requires complex calculation. Without fwupdtool, we can't reliably give a score.
+	// But we can check if the service is running or check common paths.
+	
+	return Result{"[-]", "GNOME HSI", "Unavailable (fwupdtool not found)", ColorRed, 2, nil}
 }
