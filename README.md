@@ -29,8 +29,8 @@
 
 ```bash
 # Clone the repository
-git clone https://github.com/euxaristia/AreWeHardYet.git
-cd AreWeHardYet
+git clone https://github.com/euxaristia/awhy.git
+cd awhy
 
 # Build the binary
 go build -o awhy main.go
@@ -68,7 +68,7 @@ Run the tool to audit your system:
 
 Contributions are welcome! If you have ideas for new security checks or improvements to the UI, feel free to:
 
-1. Fork the project.
+1. Fork the project at https://github.com/euxaristia/awhy
 2. Create your feature branch (`git checkout -b feature/AmazingFeature`).
 3. Commit your changes (`git commit -m 'Add some AmazingFeature'`).
 4. Push to the branch (`git push origin feature/AmazingFeature`).
