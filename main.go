@@ -22,6 +22,14 @@ const (
 	ColorBold   = "\033[1m"
 )
 
+type Result struct {
+	Prefix      string
+	Description string
+	Status      string
+	Color       string
+	SortWeight  int // 0 for [+], 1 for [!], 2 for [-]
+}
+
 func main() {
 	printHeader()
 
@@ -35,15 +43,22 @@ func main() {
 		fmt.Println()
 	}
 
-	checkKernelName()
-	checkASLR()
-	checkKptrRestrict()
-	checkDmesgRestrict()
-	checkBpfJitHarden()
-	checkSELinux()
-	checkAppArmor()
-	checkYama()
-	checkFsProtections()
+	var generalResults []Result
+	generalResults = append(generalResults, checkKernelName())
+	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/randomize_va_space", "2", "ASLR"))
+	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/kptr_restrict", "2", "Kernel Pointer Restrict"))
+	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/dmesg_restrict", "1", "dmesg Restrict"))
+	generalResults = append(generalResults, getFileValueResult("/proc/sys/net/core/bpf_jit_harden", "2", "BPF JIT Hardening"))
+	generalResults = append(generalResults, checkSELinux())
+	generalResults = append(generalResults, checkAppArmor())
+	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/yama/ptrace_scope", "1", "Yama ptrace_scope"))
+	generalResults = append(generalResults, getFileValueResult("/proc/sys/fs/protected_hardlinks", "1", "Protected Hardlinks"))
+	generalResults = append(generalResults, getFileValueResult("/proc/sys/fs/protected_symlinks", "1", "Protected Symlinks"))
+	generalResults = append(generalResults, getFileValueResult("/proc/sys/fs/protected_fifos", "1", "Protected FIFOs"))
+	generalResults = append(generalResults, getFileValueResult("/proc/sys/fs/protected_regular", "1", "Protected Regular Files"))
+
+	sortAndPrintResults(generalResults)
+
 	checkKernelConfig()
 }
 
@@ -60,106 +75,89 @@ func printHeader() {
 	fmt.Println("========================================================")
 }
 
-func printStatus(prefix string, description string, status string, color string) {
-	fmt.Printf("%s%s %-30s: %s%s\n", color, prefix, description, status, ColorReset)
+func sortAndPrintResults(results []Result) {
+	sort.Slice(results, func(i, j int) bool {
+		if results[i].SortWeight != results[j].SortWeight {
+			return results[i].SortWeight < results[j].SortWeight
+		}
+		return results[i].Description < results[j].Description
+	})
+
+	for _, r := range results {
+		fmt.Printf("%s%s %-30s: %s%s\n", r.Color, r.Prefix, r.Description, r.Status, ColorReset)
+	}
 }
 
-func checkFileValue(path string, expected string, description string) {
+func getFileValueResult(path string, expected string, description string) Result {
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
-		printStatus("[-]", description, "Could not read "+path, ColorRed)
-		return
+		return Result{"[-]", description, "Could not read " + path, ColorRed, 2}
 	}
 	val := strings.TrimSpace(string(content))
 	if val == expected {
-		printStatus("[+]", description, "Enabled ("+val+")", ColorGreen)
+		return Result{"[+]", description, "Enabled (" + val + ")", ColorGreen, 0}
 	} else {
-		printStatus("[!]", description, "Disabled or weak ("+val+")", ColorYellow)
+		return Result{"[!]", description, "Disabled or weak (" + val + ")", ColorYellow, 1}
 	}
 }
 
-func checkKernelName() {
+func checkKernelName() Result {
 	out, err := exec.Command("uname", "-r").Output()
 	if err == nil {
 		version := strings.ToLower(string(out))
 		if strings.Contains(version, "hardened") {
-			printStatus("[+]", "Hardened Kernel", "Yes ("+strings.TrimSpace(string(out))+")", ColorGreen)
+			return Result{"[+]", "Hardened Kernel", "Yes (" + strings.TrimSpace(string(out)) + ")", ColorGreen, 0}
 		} else {
-			printStatus("[-]", "Hardened Kernel", "No (Standard kernel)", ColorRed)
+			return Result{"[-]", "Hardened Kernel", "No (Standard kernel)", ColorRed, 2}
 		}
 	}
+	return Result{"[-]", "Hardened Kernel", "Unknown", ColorRed, 2}
 }
 
-func checkASLR() {
-	checkFileValue("/proc/sys/kernel/randomize_va_space", "2", "ASLR")
-}
-
-func checkKptrRestrict() {
-	checkFileValue("/proc/sys/kernel/kptr_restrict", "2", "Kernel Pointer Restrict")
-}
-
-func checkDmesgRestrict() {
-	checkFileValue("/proc/sys/kernel/dmesg_restrict", "1", "dmesg Restrict")
-}
-
-func checkBpfJitHarden() {
-	checkFileValue("/proc/sys/net/core/bpf_jit_harden", "2", "BPF JIT Hardening")
-}
-
-func checkSELinux() {
+func checkSELinux() Result {
 	_, err := os.Stat("/sys/fs/selinux")
 	if err == nil {
 		content, err := ioutil.ReadFile("/sys/fs/selinux/enforce")
 		if err == nil {
 			if strings.TrimSpace(string(content)) == "1" {
-				printStatus("[+]", "SELinux", "Enabled (Enforcing)", ColorGreen)
+				return Result{"[+]", "SELinux", "Enabled (Enforcing)", ColorGreen, 0}
 			} else {
-				printStatus("[!]", "SELinux", "Enabled (Permissive)", ColorYellow)
+				return Result{"[!]", "SELinux", "Enabled (Permissive)", ColorYellow, 1}
 			}
-			return
 		}
-		printStatus("[+]", "SELinux", "Present", ColorGreen)
-	} else {
-		printStatus("[-]", "SELinux", "Not found", ColorRed)
+		return Result{"[+]", "SELinux", "Present", ColorGreen, 0}
 	}
+	return Result{"[-]", "SELinux", "Not found", ColorRed, 2}
 }
 
-func checkAppArmor() {
+func checkAppArmor() Result {
 	_, err := os.Stat("/sys/kernel/security/apparmor")
 	if err == nil {
 		content, err := ioutil.ReadFile("/sys/module/apparmor/parameters/enabled")
 		if err == nil && strings.TrimSpace(string(content)) == "Y" {
-			printStatus("[+]", "AppArmor", "Enabled", ColorGreen)
+			return Result{"[+]", "AppArmor", "Enabled", ColorGreen, 0}
 		} else {
-			printStatus("[!]", "AppArmor", "Present but disabled", ColorYellow)
+			return Result{"[!]", "AppArmor", "Present but disabled", ColorYellow, 1}
 		}
-	} else {
-		printStatus("[-]", "AppArmor", "Not found", ColorRed)
 	}
-}
-
-func checkYama() {
-	checkFileValue("/proc/sys/kernel/yama/ptrace_scope", "1", "Yama ptrace_scope")
-}
-
-func checkFsProtections() {
-	checkFileValue("/proc/sys/fs/protected_hardlinks", "1", "Protected Hardlinks")
-	checkFileValue("/proc/sys/fs/protected_symlinks", "1", "Protected Symlinks")
-	checkFileValue("/proc/sys/fs/protected_fifos", "1", "Protected FIFOs")
-	checkFileValue("/proc/sys/fs/protected_regular", "1", "Protected Regular Files")
+	return Result{"[-]", "AppArmor", "Not found", ColorRed, 2}
 }
 
 func checkKernelConfig() {
 	f, err := os.Open("/proc/config.gz")
 	if err != nil {
-		printStatus("[-]", "Kernel Config Checks", "Could not open /proc/config.gz", ColorRed)
+		fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
+		fmt.Println("-------------------------------")
+		fmt.Printf("%s[-] %-30s: %s%s\n", ColorRed, "Kernel Config Checks", "Could not open /proc/config.gz", ColorReset)
 		return
 	}
 	defer f.Close()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
-		printStatus("[-]", "Kernel Config Checks", "Could not decompress /proc/config.gz", ColorRed)
+		fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
+		fmt.Println("-------------------------------")
+		fmt.Printf("%s[-] %-30s: %s%s\n", ColorRed, "Kernel Config Checks", "Could not decompress /proc/config.gz", ColorReset)
 		return
 	}
 	defer gz.Close()
@@ -186,24 +184,19 @@ func checkKernelConfig() {
 		}
 	}
 
-	fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
-	fmt.Println("-------------------------------")
-
-	var keys []string
-	for k := range configs {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
-	for _, cfg := range keys {
-		expected := configs[cfg]
+	var results []Result
+	for cfg, expected := range configs {
 		val, ok := found[cfg]
 		if ok && val == expected {
-			printStatus("[+]", cfg, "Enabled ("+val+")", ColorGreen)
+			results = append(results, Result{"[+]", cfg, "Enabled (" + val + ")", ColorGreen, 0})
 		} else if ok {
-			printStatus("[!]", cfg, "Disabled or different ("+val+")", ColorYellow)
+			results = append(results, Result{"[!]", cfg, "Disabled or different (" + val + ")", ColorYellow, 1})
 		} else {
-			printStatus("[-]", cfg, "Not set", ColorRed)
+			results = append(results, Result{"[-]", cfg, "Not set", ColorRed, 2})
 		}
 	}
+
+	fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
+	fmt.Println("-------------------------------")
+	sortAndPrintResults(results)
 }
