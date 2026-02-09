@@ -50,12 +50,13 @@ Run the tool to audit your system:
 ## 📊 Example Output
 
 ```text
-[+] ASLR                                    : Enabled (2)
-[+] Hardened Kernel                         : Yes (Score: 4)
+[+] ASLR                                    : Full (2)
+[+] Hardened Kernel                         : Yes (Confidence Score: 4)
+   ├── Confidence Score is based on kernel name, boot params, and lockdown state.
    ├── Kernel version string contains 'hardened': 6.17.13-2-cachyos-hardened-lto
    ├── Boot parameter found: pti=on (Enables Kernel Page Table Isolation)
    └── Boot parameter found: page_alloc.shuffle=1 (Randomizes page allocator)
-[+] Kernel Pointer Restrict                 : Enabled (2)
+[+] Kernel Pointer Restrict                 : Hides for all (2)
 ...
 [-] AppArmor                                : Not found
 [-] SELinux                                 : Not found

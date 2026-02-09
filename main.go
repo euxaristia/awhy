@@ -46,17 +46,30 @@ func main() {
 
 	var generalResults []Result
 	generalResults = append(generalResults, checkHardenedKernel())
-	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/randomize_va_space", "2", "ASLR"))
-	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/kptr_restrict", "2", "Kernel Pointer Restrict"))
-	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/dmesg_restrict", "1", "dmesg Restrict"))
-	generalResults = append(generalResults, getFileValueResult("/proc/sys/net/core/bpf_jit_harden", "2", "BPF JIT Hardening"))
+
+	aslrMap := map[string]string{"0": "Disabled", "1": "Conservative", "2": "Full"}
+	generalResults = append(generalResults, getSysctlResult("/proc/sys/kernel/randomize_va_space", "2", "ASLR", aslrMap))
+
+	kptrMap := map[string]string{"0": "Disabled", "1": "Hides for non-privileged", "2": "Hides for all"}
+	generalResults = append(generalResults, getSysctlResult("/proc/sys/kernel/kptr_restrict", "2", "Kernel Pointer Restrict", kptrMap))
+
+	dmesgMap := map[string]string{"0": "Disabled", "1": "Restricted"}
+	generalResults = append(generalResults, getSysctlResult("/proc/sys/kernel/dmesg_restrict", "1", "dmesg Restrict", dmesgMap))
+
+	bpfMap := map[string]string{"0": "Disabled", "1": "Enabled (Unprivileged)", "2": "Enabled (All)"}
+	generalResults = append(generalResults, getSysctlResult("/proc/sys/net/core/bpf_jit_harden", "2", "BPF JIT Hardening", bpfMap))
+
 	generalResults = append(generalResults, checkSELinux())
 	generalResults = append(generalResults, checkAppArmor())
-	generalResults = append(generalResults, getFileValueResult("/proc/sys/kernel/yama/ptrace_scope", "1", "Yama ptrace_scope"))
-	generalResults = append(generalResults, getFileValueResult("/proc/sys/fs/protected_hardlinks", "1", "Protected Hardlinks"))
-	generalResults = append(generalResults, getFileValueResult("/proc/sys/fs/protected_symlinks", "1", "Protected Symlinks"))
-	generalResults = append(generalResults, getFileValueResult("/proc/sys/fs/protected_fifos", "1", "Protected FIFOs"))
-	generalResults = append(generalResults, getFileValueResult("/proc/sys/fs/protected_regular", "1", "Protected Regular Files"))
+
+	ptraceMap := map[string]string{"0": "Classic", "1": "Restricted (Child)", "2": "Admin Only", "3": "None"}
+	generalResults = append(generalResults, getSysctlResult("/proc/sys/kernel/yama/ptrace_scope", "1", "Yama ptrace_scope", ptraceMap))
+
+	boolMap := map[string]string{"0": "Disabled", "1": "Enabled"}
+	generalResults = append(generalResults, getSysctlResult("/proc/sys/fs/protected_hardlinks", "1", "Protected Hardlinks", boolMap))
+	generalResults = append(generalResults, getSysctlResult("/proc/sys/fs/protected_symlinks", "1", "Protected Symlinks", boolMap))
+	generalResults = append(generalResults, getSysctlResult("/proc/sys/fs/protected_fifos", "1", "Protected FIFOs", boolMap))
+	generalResults = append(generalResults, getSysctlResult("/proc/sys/fs/protected_regular", "1", "Protected Regular Files", boolMap))
 
 	sortAndPrintResults(generalResults)
 
@@ -125,6 +138,25 @@ func getFileValueResult(path string, expected string, description string) Result
 		return Result{"[+]", description, "Enabled (" + val + ")", ColorGreen, 0, nil}
 	} else {
 		return Result{"[!]", description, "Disabled or weak (" + val + ")", ColorYellow, 1, nil}
+	}
+}
+
+func getSysctlResult(path string, expected string, description string, mapping map[string]string) Result {
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
+		return Result{"[-]", description, "Could not read " + path, ColorRed, 2, nil}
+	}
+	val := strings.TrimSpace(string(content))
+	statusText, ok := mapping[val]
+	if !ok {
+		statusText = "Unknown"
+	}
+
+	status := fmt.Sprintf("%s (%s)", statusText, val)
+	if val == expected {
+		return Result{"[+]", description, status, ColorGreen, 0, nil}
+	} else {
+		return Result{"[!]", description, status, ColorYellow, 1, nil}
 	}
 }
 
@@ -211,11 +243,11 @@ func checkHardenedKernel() Result {
 	weight := 2
 
 	if score >= 2 {
-		status = fmt.Sprintf("Yes (Score: %d)", score)
+		status = fmt.Sprintf("Yes (Confidence Score: %d)", score)
 		color = ColorGreen
 		weight = 0
 	} else if score > 0 {
-		status = fmt.Sprintf("Partial (Score: %d)", score)
+		status = fmt.Sprintf("Partial (Confidence Score: %d)", score)
 		color = ColorYellow
 		weight = 1
 	}
@@ -226,6 +258,8 @@ func checkHardenedKernel() Result {
 	if len(subInfo) == 0 {
 		return Result{"[-]", "Hardened Kernel", status, color, weight, nil}
 	}
+
+	subInfo = append([]string{"Confidence Score is based on kernel name, boot params, and lockdown state."}, subInfo...)
 
 	return Result{
 		Prefix:      getPrefix(weight),
