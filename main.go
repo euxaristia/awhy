@@ -78,7 +78,7 @@ func checkFileValue(path string, expected string, description string) {
 }
 
 func checkKernelName() {
-	out, err := exec.Command("uname", "-v").Output()
+	out, err := exec.Command("uname", "-a").Output()
 	if err == nil {
 		version := strings.ToLower(string(out))
 		if strings.Contains(version, "hardened") {
