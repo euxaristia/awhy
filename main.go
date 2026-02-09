@@ -44,10 +44,10 @@ func main() {
 		fmt.Println()
 	}
 
-	config := getKernelConfig()
+	config, configErr := getKernelConfig()
 
 	var generalResults []Result
-	generalResults = append(generalResults, checkHardenedKernel(config))
+	generalResults = append(generalResults, checkHardenedKernel(config, configErr))
 	generalResults = append(generalResults, checkSecureBoot())
 	generalResults = append(generalResults, checkKernelTaint())
 	generalResults = append(generalResults, checkGnomeHSI())
@@ -78,7 +78,7 @@ func main() {
 
 	sortAndPrintResults(generalResults)
 
-	checkKernelConfig(config)
+	checkKernelConfig(config, configErr)
 }
 
 func printHeader() {
@@ -136,7 +136,11 @@ func sortAndPrintResults(results []Result) {
 func getSysctlResult(path string, expected string, description string, mapping map[string]string) Result {
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
-		return Result{"[-]", description, "Could not read " + path, ColorRed, 2, nil}
+		status := "Could not read " + path
+		if os.IsPermission(err) {
+			status = "Requires root"
+		}
+		return Result{"[-]", description, status, ColorRed, 2, nil}
 	}
 	val := strings.TrimSpace(string(content))
 	statusText, ok := mapping[val]
@@ -152,16 +156,16 @@ func getSysctlResult(path string, expected string, description string, mapping m
 	}
 }
 
-func getKernelConfig() map[string]string {
+func getKernelConfig() (map[string]string, error) {
 	f, err := os.Open("/proc/config.gz")
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer f.Close()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
-		return nil
+		return nil, err
 	}
 	defer gz.Close()
 
@@ -174,10 +178,10 @@ func getKernelConfig() map[string]string {
 			found[parts[0]] = parts[1]
 		}
 	}
-	return found
+	return found, nil
 }
 
-func checkHardenedKernel(config map[string]string) Result {
+func checkHardenedKernel(config map[string]string, configErr error) Result {
 	var subInfo []string
 	score := 0 // Higher is better
 
@@ -256,7 +260,11 @@ func checkHardenedKernel(config map[string]string) Result {
 			}
 		}
 	} else {
-		subInfo = append(subInfo, "Kernel config unavailable for analysis (/proc/config.gz missing)")
+		msg := "Kernel config unavailable for analysis (/proc/config.gz missing)"
+		if configErr != nil && os.IsPermission(configErr) {
+			msg = "Kernel config analysis requires root privileges"
+		}
+		subInfo = append(subInfo, msg)
 	}
 
 	// Check 3: Lockdown Mode
@@ -329,14 +337,18 @@ func checkSELinux() Result {
 	_, err := os.Stat("/sys/fs/selinux")
 	if err == nil {
 		content, err := ioutil.ReadFile("/sys/fs/selinux/enforce")
-		if err == nil {
-			if strings.TrimSpace(string(content)) == "1" {
-				return Result{"[+]", "SELinux", "Enabled (Enforcing)", ColorGreen, 0, nil}
-			} else {
-				return Result{"[!]", "SELinux", "Enabled (Permissive)", ColorYellow, 1, nil}
+		if err != nil {
+			status := "Present"
+			if os.IsPermission(err) {
+				status = "Requires root"
 			}
+			return Result{"[+]", "SELinux", status, ColorGreen, 0, nil}
 		}
-		return Result{"[+]", "SELinux", "Present", ColorGreen, 0, nil}
+		if strings.TrimSpace(string(content)) == "1" {
+			return Result{"[+]", "SELinux", "Enabled (Enforcing)", ColorGreen, 0, nil}
+		} else {
+			return Result{"[!]", "SELinux", "Enabled (Permissive)", ColorYellow, 1, nil}
+		}
 	}
 	return Result{"[-]", "SELinux", "Not found", ColorRed, 2, nil}
 }
@@ -345,7 +357,14 @@ func checkAppArmor() Result {
 	_, err := os.Stat("/sys/kernel/security/apparmor")
 	if err == nil {
 		content, err := ioutil.ReadFile("/sys/module/apparmor/parameters/enabled")
-		if err == nil && strings.TrimSpace(string(content)) == "Y" {
+		if err != nil {
+			status := "Present"
+			if os.IsPermission(err) {
+				status = "Requires root"
+			}
+			return Result{"[!]", "AppArmor", status, ColorYellow, 1, nil}
+		}
+		if strings.TrimSpace(string(content)) == "Y" {
 			return Result{"[+]", "AppArmor", "Enabled", ColorGreen, 0, nil}
 		} else {
 			return Result{"[!]", "AppArmor", "Present but disabled", ColorYellow, 1, nil}
@@ -354,11 +373,15 @@ func checkAppArmor() Result {
 	return Result{"[-]", "AppArmor", "Not found", ColorRed, 2, nil}
 }
 
-func checkKernelConfig(found map[string]string) {
+func checkKernelConfig(found map[string]string, configErr error) {
 	if found == nil {
 		fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
 		fmt.Println("-------------------------------")
-		fmt.Printf("%s[-] %-40s: %s%s\n", ColorRed, "Kernel Config Checks", "Could not read /proc/config.gz", ColorReset)
+		status := "Could not read /proc/config.gz"
+		if configErr != nil && os.IsPermission(configErr) {
+			status = "Requires root"
+		}
+		fmt.Printf("%s[-] %-40s: %s%s\n", ColorRed, "Kernel Config Checks", status, ColorReset)
 		return
 	}
 
@@ -402,8 +425,11 @@ func checkSecureBoot() Result {
 		if _, err := os.Stat("/sys/firmware/efi"); os.IsNotExist(err) {
 			return Result{"[-]", "Secure Boot", "Not available (Legacy BIOS?)", ColorRed, 2, nil}
 		}
-		// Try to read /sys/kernel/security/securelevel or similar on some systems, but efivars is standard.
-		return Result{"[?]", "Secure Boot", "Unknown (Could not read efivar)", ColorYellow, 1, nil}
+		status := "Unknown (Could not read efivar)"
+		if os.IsPermission(err) {
+			status = "Requires root"
+		}
+		return Result{"[?]", "Secure Boot", status, ColorYellow, 1, nil}
 	}
 	// First 4 bytes are attributes, 5th byte is value.
 	if len(data) >= 5 && data[4] == 1 {
@@ -412,10 +438,18 @@ func checkSecureBoot() Result {
 	return Result{"[-]", "Secure Boot", "Disabled", ColorRed, 2, nil}
 }
 
+func isPermissionDenied(err error) bool {
+	return os.IsPermission(err)
+}
+
 func checkKernelTaint() Result {
 	content, err := ioutil.ReadFile("/proc/sys/kernel/tainted")
 	if err != nil {
-		return Result{"[?]", "Kernel Integrity", "Unknown (Could not read /proc/sys/kernel/tainted)", ColorRed, 2, nil}
+		status := "Unknown (Could not read /proc/sys/kernel/tainted)"
+		if isPermissionDenied(err) {
+			status = "Requires root"
+		}
+		return Result{"[?]", "Kernel Integrity", status, ColorRed, 2, nil}
 	}
 
 	var val int
@@ -455,7 +489,11 @@ func checkKernelTaint() Result {
 
 	// Check for common tainting modules
 	modulesBytes, err := ioutil.ReadFile("/proc/modules")
-	if err == nil {
+	if err != nil {
+		if isPermissionDenied(err) {
+			subInfo = append(subInfo, "Module analysis requires root privileges")
+		}
+	} else {
 		lines := strings.Split(string(modulesBytes), "\n")
 		for _, line := range lines {
 			fields := strings.Fields(line)
