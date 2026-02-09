@@ -164,70 +164,92 @@ func checkHardenedKernel() Result {
 	var subInfo []string
 	score := 0 // Higher is better
 
-	// Check 1: Kernel Name
-	out, err := exec.Command("uname", "-r").Output()
-	version := ""
-	if err == nil {
-		version = strings.TrimSpace(string(out))
-		lowerVersion := strings.ToLower(version)
-		if strings.Contains(lowerVersion, "hardened") {
-			subInfo = append(subInfo, fmt.Sprintf("Kernel version string contains 'hardened' (+2 points): %s", version))
-			score += 2
-		} else if strings.Contains(lowerVersion, "lts") {
-			subInfo = append(subInfo, fmt.Sprintf("Kernel version indicates LTS: %s", version))
-		}
-	}
-
-	// Check 2: Kernel Command Line Arguments
+	// Check 1: Kernel Command Line Arguments (The primary source of truth)
 	cmdlineBytes, err := ioutil.ReadFile("/proc/cmdline")
 	if err == nil {
 		cmdline := string(cmdlineBytes)
 		args := strings.Fields(cmdline)
 		
-		importantArgs := map[string]string{
-			"slab_nomerge":            "Disables merging of slab caches",
-			"slub_debug=FZP":          "Enables sanity checks for SLUB",
-			"init_on_alloc=1":         "Zeroes memory on allocation",
-			"init_on_free=1":          "Zeroes memory on free",
-			"page_alloc.shuffle=1":    "Randomizes page allocator",
-			"pti=on":                  "Enables Kernel Page Table Isolation",
-			"randomize_kstack_offset=on": "Randomizes kernel stack offset",
-			"vsyscall=none":           "Disables legacy vsyscalls",
-			"debugfs=off":             "Disables debugfs",
-			"oops=panic":              "Panics on oops",
-			"lockdown=confidentiality": "Enables lockdown mode (confidentiality)",
-			"lockdown=integrity":       "Enables lockdown mode (integrity)",
+		positiveArgs := map[string]string{
+			"slab_nomerge":            "Disables merging of slab caches (+1)",
+			"slub_debug=FZP":          "Enables sanity checks for SLUB (+1)",
+			"init_on_alloc=1":         "Zeroes memory on allocation (+1)",
+			"init_on_free=1":          "Zeroes memory on free (+1)",
+			"page_alloc.shuffle=1":    "Randomizes page allocator (+1)",
+			"pti=on":                  "Enables Kernel Page Table Isolation (+1)",
+			"randomize_kstack_offset=on": "Randomizes kernel stack offset (+1)",
+			"vsyscall=none":           "Disables legacy vsyscalls (+1)",
+			"debugfs=off":             "Disables debugfs (+1)",
+			"oops=panic":              "Panics on oops (+1)",
+			"lockdown=confidentiality": "Enables lockdown mode: confidentiality (+3)",
+			"lockdown=integrity":       "Enables lockdown mode: integrity (+2)",
+			"page_poison=1":           "Enables page poisoning (+1)",
+			"slub_debug=P":            "Enables SLUB poisoning (+1)",
+			"spectre_v2=on":           "Enables Spectre v2 mitigation (+1)",
+			"spec_store_bypass_disable=on": "Enables Speculative Store Bypass mitigation (+1)",
+			"l1tf=full,force":         "Enables full L1TF mitigation (+1)",
+			"mds=full,raw":            "Enables full MDS mitigation (+1)",
+			"tsx=off":                 "Disables TSX (+1)",
+			"iommu=force":             "Forces IOMMU usage (+1)",
+		}
+
+		negativeArgs := map[string]string{
+			"vsyscall=emulate": "Uses legacy vsyscall emulation (-2)",
+			"vsyscall=native":  "Uses legacy vsyscall native mode (-3)",
+			"debugfs=on":       "Explicitly enables debugfs (-1)",
+			"nokaslr":          "Explicitly disables KASLR (-5)",
+			"nopti":            "Explicitly disables PTI (-3)",
+			"nospectre_v2":     "Explicitly disables Spectre v2 mitigations (-3)",
+			"mitigations=off":  "Explicitly disables all mitigations (-10)",
 		}
 
 		for _, arg := range args {
-			for key, desc := range importantArgs {
-				if arg == key || (strings.Contains(key, "=") && arg == key) || (!strings.Contains(key, "=") && strings.Contains(arg, key)) {
-					// Simple matching for now, can be improved
-					if arg == key {
-						subInfo = append(subInfo, fmt.Sprintf("Boot parameter found (+1 point): %s (%s)", arg, desc))
-						score += 1
-					}
+			// Check Positive
+			if desc, ok := positiveArgs[arg]; ok {
+				subInfo = append(subInfo, fmt.Sprintf("Hardening parameter: %s (%s)", arg, desc))
+				if strings.Contains(desc, "+3") {
+					score += 3
+				} else if strings.Contains(desc, "+2") {
+					score += 2
+				} else {
+					score += 1
+				}
+			}
+			// Check Negative
+			if desc, ok := negativeArgs[arg]; ok {
+				subInfo = append(subInfo, fmt.Sprintf("Standard/Weak parameter: %s (%s)", arg, desc))
+				if strings.Contains(desc, "-10") {
+					score -= 10
+				} else if strings.Contains(desc, "-5") {
+					score -= 5
+				} else if strings.Contains(desc, "-3") {
+					score -= 3
+				} else if strings.Contains(desc, "-2") {
+					score -= 2
+				} else {
+					score -= 1
 				}
 			}
 		}
 	}
 
-	// Check 3: Lockdown Mode (Direct check)
+	// Check 2: Lockdown Mode (Direct check)
 	lockdownBytes, err := ioutil.ReadFile("/sys/kernel/security/lockdown")
 	if err == nil {
 		lockdownContent := string(lockdownBytes)
-		// Format is usually [none] integrity confidentiality or similar, with [] around active
 		if strings.Contains(lockdownContent, "[integrity]") {
 			subInfo = append(subInfo, "Lockdown mode enabled (+2 points): integrity")
 			score += 2
 		} else if strings.Contains(lockdownContent, "[confidentiality]") {
 			subInfo = append(subInfo, "Lockdown mode enabled (+3 points): confidentiality")
 			score += 3
+		} else if strings.Contains(lockdownContent, "[none]") {
+			subInfo = append(subInfo, "Lockdown mode explicitly disabled (-1 point)")
+			score -= 1
 		}
 	}
 
-	// Check 4: Specific Hardening Sysctls (PaX/Grsecurity legacy or modern equivalents)
-	// Just checking existence for now as a strong signal
+	// Check 3: Specific Hardening Sysctls
 	if _, err := os.Stat("/proc/sys/kernel/pax"); err == nil {
 		subInfo = append(subInfo, "PaX sysctl directory detected (+5 points)")
 		score += 5
@@ -237,12 +259,17 @@ func checkHardenedKernel() Result {
 		score += 5
 	}
 
+	// Check 4: Version string as a MINOR hint only if score is already high, 
+	// but we won't add points for it anymore. Instead, we just use it for the display.
+	out, _ := exec.Command("uname", "-r").Output()
+	version := strings.TrimSpace(string(out))
+
 	// Determine Result
 	status := "No (Standard kernel)"
 	color := ColorRed
 	weight := 2
 
-	if score >= 2 {
+	if score >= 3 {
 		status = fmt.Sprintf("Yes (Confidence Score: %d)", score)
 		color = ColorGreen
 		weight = 0
@@ -250,16 +277,17 @@ func checkHardenedKernel() Result {
 		status = fmt.Sprintf("Partial (Confidence Score: %d)", score)
 		color = ColorYellow
 		weight = 1
+	} else if score < 0 {
+		status = fmt.Sprintf("Weak/Insecure (Confidence Score: %d)", score)
+		color = ColorRed
+		weight = 2
 	}
-
-	// If score is low but we detected standard kernel, might just be standard.
-	// But if we found *some* evidence, list it.
 
 	if len(subInfo) == 0 {
-		return Result{"[-]", "Hardened Kernel", status, color, weight, nil}
+		return Result{"[-]", "Hardened Kernel", "No (Standard kernel)", ColorRed, 2, []string{"No hardening indicators found in boot parameters or sysctls."}}
 	}
 
-	subInfo = append([]string{"Confidence Score is based on kernel name, boot params, and lockdown state."}, subInfo...)
+	subInfo = append([]string{fmt.Sprintf("Kernel: %s", version), "Confidence Score is based on real-time boot parameters and kernel features."}, subInfo...)
 
 	return Result{
 		Prefix:      getPrefix(weight),
