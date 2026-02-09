@@ -103,12 +103,18 @@ func sortAndPrintResults(results []Result) {
 				return 0
 			case "ASLR":
 				return 1
+			case "BPF JIT Hardening":
+				return 10
 			case "NSA SELinux":
-				return 2
+				return 11
 			case "AppArmor":
-				return 3
+				return 12
+			case "GNOME HSI":
+				return 13
+			case "Secure Boot":
+				return 14
 			default:
-				return 4
+				return 5 // General checks in between
 			}
 		}
 
@@ -121,24 +127,6 @@ func sortAndPrintResults(results []Result) {
 
 		if results[i].SortWeight != results[j].SortWeight {
 			return results[i].SortWeight < results[j].SortWeight
-		}
-
-		// Custom logic for BPF JIT Hardening to keep it at the boundary between groups
-		if results[i].Description == "BPF JIT Hardening" {
-			if results[i].SortWeight == 0 { // Enabled: move to bottom of its group
-				return false
-			}
-			if results[i].SortWeight == 2 { // Disabled/Missing: move to top of its group
-				return true
-			}
-		}
-		if results[j].Description == "BPF JIT Hardening" {
-			if results[j].SortWeight == 0 { // Enabled: j is bottom, so i < j is true
-				return true
-			}
-			if results[j].SortWeight == 2 { // Disabled/Missing: j is top, so i < j is false
-				return false
-			}
 		}
 
 		return results[i].Description < results[j].Description

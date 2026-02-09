@@ -56,9 +56,12 @@ Run the tool to audit your system:
    ├── Score accounts for both boot parameters and compiled-in kernel defaults.
 ...
 [+] ASLR                                    : Full (2)
+...
+[-] BPF JIT Hardening                       : Requires root
 [-] NSA SELinux                             : Not found
 [-] AppArmor                                : Not found
-...
+[-] GNOME HSI                               : Unavailable (fwupdtool not found)
+[-] Secure Boot                             : Disabled
 ```
 
 ## 🛠️ Contributing
