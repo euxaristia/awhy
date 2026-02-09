@@ -129,13 +129,13 @@ func sortAndPrintResults(results []Result) {
 				return 1
 			case "BPF JIT Hardening":
 				return 10
-			case "NSA SELinux":
-				return 11
-			case "AppArmor":
-				return 12
 			case "Landlock LSM":
-				return 13
+				return 11
 			case "Lockdown LSM":
+				return 12
+			case "NSA SELinux":
+				return 13
+			case "AppArmor":
 				return 14
 			case "GNOME HSI":
 				return 20
