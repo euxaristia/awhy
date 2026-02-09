@@ -50,12 +50,12 @@ Run the tool to audit your system:
 ## 📊 Example Output
 
 ```text
-[+] ASLR                          : Enabled (2)
-[+] Hardened Kernel               : Yes (6.17.13-2-cachyos-hardened-lto)
-[+] Kernel Pointer Restrict       : Enabled (2)
+[+] ASLR                                    : Enabled (2)
+[+] Hardened Kernel                         : Yes (6.17.13-2-cachyos-hardened-lto)
+[+] Kernel Pointer Restrict                 : Enabled (2)
 ...
-[-] AppArmor                      : Not found
-[-] SELinux                       : Not found
+[-] AppArmor                                : Not found
+[-] SELinux                                 : Not found
 ```
 
 ## 🛠️ Contributing

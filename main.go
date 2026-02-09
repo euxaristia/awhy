@@ -103,7 +103,7 @@ func sortAndPrintResults(results []Result) {
 	})
 
 	for _, r := range results {
-		fmt.Printf("%s%s %-30s: %s%s\n", r.Color, r.Prefix, r.Description, r.Status, ColorReset)
+		fmt.Printf("%s%s %-40s: %s%s\n", r.Color, r.Prefix, r.Description, r.Status, ColorReset)
 	}
 }
 
@@ -167,7 +167,7 @@ func checkKernelConfig() {
 	if err != nil {
 		fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
 		fmt.Println("-------------------------------")
-		fmt.Printf("%s[-] %-30s: %s%s\n", ColorRed, "Kernel Config Checks", "Could not open /proc/config.gz", ColorReset)
+		fmt.Printf("%s[-] %-40s: %s%s\n", ColorRed, "Kernel Config Checks", "Could not open /proc/config.gz", ColorReset)
 		return
 	}
 	defer f.Close()
@@ -176,7 +176,7 @@ func checkKernelConfig() {
 	if err != nil {
 		fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
 		fmt.Println("-------------------------------")
-		fmt.Printf("%s[-] %-30s: %s%s\n", ColorRed, "Kernel Config Checks", "Could not decompress /proc/config.gz", ColorReset)
+		fmt.Printf("%s[-] %-40s: %s%s\n", ColorRed, "Kernel Config Checks", "Could not decompress /proc/config.gz", ColorReset)
 		return
 	}
 	defer gz.Close()
