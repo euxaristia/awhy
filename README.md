@@ -51,9 +51,10 @@ Run the tool to audit your system:
 
 ```text
 [+] ASLR                                    : Full (2)
-[!] Hardened Kernel                         : Partial (Confidence Score: 1)
+[!] Hardened Kernel                         : Partial (5% Hardened)
    ├── Kernel: 6.17.13-2-cachyos-hardened-lto
-   ├── Confidence Score is based on real-time boot parameters and kernel features.
+   ├── Confidence Score: 1/20 points (5%)
+   ├── Score is based on real-time boot parameters and kernel security features.
    ├── Hardening parameter: pti=on (Enables Kernel Page Table Isolation (+1))
    ├── Hardening parameter: page_alloc.shuffle=1 (Randomizes page allocator (+1))
    └── Lockdown mode explicitly disabled (-1 point)

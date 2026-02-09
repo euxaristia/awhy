@@ -269,25 +269,38 @@ func checkHardenedKernel() Result {
 	color := ColorRed
 	weight := 2
 
+	maxScore := 20 // Target score for 100% hardening
+	percentage := (score * 100) / maxScore
+	if percentage > 100 {
+		percentage = 100
+	}
+	if percentage < 0 {
+		percentage = 0
+	}
+
 	if score >= 3 {
-		status = fmt.Sprintf("Yes (Confidence Score: %d)", score)
+		status = fmt.Sprintf("Yes (%d%% Hardened)", percentage)
 		color = ColorGreen
 		weight = 0
 	} else if score > 0 {
-		status = fmt.Sprintf("Partial (Confidence Score: %d)", score)
+		status = fmt.Sprintf("Partial (%d%% Hardened)", percentage)
 		color = ColorYellow
 		weight = 1
 	} else if score < 0 {
-		status = fmt.Sprintf("Weak/Insecure (Confidence Score: %d)", score)
+		status = fmt.Sprintf("Weak/Insecure (%d%% Hardened)", percentage)
 		color = ColorRed
 		weight = 2
 	}
 
 	if len(subInfo) == 0 {
-		return Result{"[-]", "Hardened Kernel", "No (Standard kernel)", ColorRed, 2, []string{"No hardening indicators found in boot parameters or sysctls."}}
+		return Result{"[-]", "Hardened Kernel", "No (0% Hardened)", ColorRed, 2, []string{"No hardening indicators found in boot parameters or sysctls."}}
 	}
 
-	subInfo = append([]string{fmt.Sprintf("Kernel: %s", version), "Confidence Score is based on real-time boot parameters and kernel features."}, subInfo...)
+	subInfo = append([]string{
+		fmt.Sprintf("Kernel: %s", version),
+		fmt.Sprintf("Confidence Score: %d/%d points (%d%%)", score, maxScore, percentage),
+		"Score is based on real-time boot parameters and kernel security features.",
+	}, subInfo...)
 
 	return Result{
 		Prefix:      getPrefix(weight),
