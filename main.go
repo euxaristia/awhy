@@ -80,6 +80,25 @@ func sortAndPrintResults(results []Result) {
 		if results[i].SortWeight != results[j].SortWeight {
 			return results[i].SortWeight < results[j].SortWeight
 		}
+
+		// Custom logic for BPF JIT Hardening to keep it at the boundary between groups
+		if results[i].Description == "BPF JIT Hardening" {
+			if results[i].SortWeight == 0 { // Enabled: move to bottom of its group
+				return false
+			}
+			if results[i].SortWeight == 2 { // Disabled/Missing: move to top of its group
+				return true
+			}
+		}
+		if results[j].Description == "BPF JIT Hardening" {
+			if results[j].SortWeight == 0 { // Enabled: j is bottom, so i < j is true
+				return true
+			}
+			if results[j].SortWeight == 2 { // Disabled/Missing: j is top, so i < j is false
+				return false
+			}
+		}
+
 		return results[i].Description < results[j].Description
 	})
 
