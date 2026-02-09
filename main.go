@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strings"
 )
 
@@ -187,7 +188,15 @@ func checkKernelConfig() {
 
 	fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
 	fmt.Println("-------------------------------")
-	for cfg, expected := range configs {
+
+	var keys []string
+	for k := range configs {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, cfg := range keys {
+		expected := configs[cfg]
 		val, ok := found[cfg]
 		if ok && val == expected {
 			printStatus("[+]", cfg, "Enabled ("+val+")", ColorGreen)
