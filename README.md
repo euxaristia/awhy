@@ -95,9 +95,5 @@ Contributions are welcome! If you have ideas for new security checks or improvem
 4. Push to the branch (`git push origin feature/AmazingFeature`).
 5. Open a Pull Request.
 
-## 📄 License
-
-This project is not yet licensed. All rights are reserved by the author until a license is chosen.
-
 ---
 *Stay Hard!* 🛡️
