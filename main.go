@@ -44,8 +44,10 @@ func main() {
 		fmt.Println()
 	}
 
+	config := getKernelConfig()
+
 	var generalResults []Result
-	generalResults = append(generalResults, checkHardenedKernel())
+	generalResults = append(generalResults, checkHardenedKernel(config))
 	generalResults = append(generalResults, checkSecureBoot())
 	generalResults = append(generalResults, checkKernelTaint())
 	generalResults = append(generalResults, checkGnomeHSI())
@@ -76,7 +78,7 @@ func main() {
 
 	sortAndPrintResults(generalResults)
 
-	checkKernelConfig()
+	checkKernelConfig(config)
 }
 
 func printHeader() {
@@ -131,19 +133,6 @@ func sortAndPrintResults(results []Result) {
 	}
 }
 
-func getFileValueResult(path string, expected string, description string) Result {
-	content, err := ioutil.ReadFile(path)
-	if err != nil {
-		return Result{"[-]", description, "Could not read " + path, ColorRed, 2, nil}
-	}
-	val := strings.TrimSpace(string(content))
-	if val == expected {
-		return Result{"[+]", description, "Enabled (" + val + ")", ColorGreen, 0, nil}
-	} else {
-		return Result{"[!]", description, "Disabled or weak (" + val + ")", ColorYellow, 1, nil}
-	}
-}
-
 func getSysctlResult(path string, expected string, description string, mapping map[string]string) Result {
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
@@ -163,11 +152,36 @@ func getSysctlResult(path string, expected string, description string, mapping m
 	}
 }
 
-func checkHardenedKernel() Result {
+func getKernelConfig() map[string]string {
+	f, err := os.Open("/proc/config.gz")
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return nil
+	}
+	defer gz.Close()
+
+	found := make(map[string]string)
+	scanner := bufio.NewScanner(gz)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.Contains(line, "=") {
+			parts := strings.SplitN(line, "=", 2)
+			found[parts[0]] = parts[1]
+		}
+	}
+	return found
+}
+
+func checkHardenedKernel(config map[string]string) Result {
 	var subInfo []string
 	score := 0 // Higher is better
 
-	// Check 1: Kernel Command Line Arguments (The primary source of truth)
+	// Check 1: Kernel Command Line Arguments
 	cmdlineBytes, err := ioutil.ReadFile("/proc/cmdline")
 	if err == nil {
 		cmdline := string(cmdlineBytes)
@@ -207,81 +221,84 @@ func checkHardenedKernel() Result {
 		}
 
 		for _, arg := range args {
-			// Check Positive
 			if desc, ok := positiveArgs[arg]; ok {
-				subInfo = append(subInfo, fmt.Sprintf("Hardening parameter: %s (%s)", arg, desc))
-				if strings.Contains(desc, "+3") {
-					score += 3
-				} else if strings.Contains(desc, "+2") {
-					score += 2
-				} else {
-					score += 1
-				}
+				subInfo = append(subInfo, fmt.Sprintf("Boot parameter: %s (%s)", arg, desc))
+				if strings.Contains(desc, "+3") { score += 3 } else if strings.Contains(desc, "+2") { score += 2 } else { score += 1 }
 			}
-			// Check Negative
 			if desc, ok := negativeArgs[arg]; ok {
-				subInfo = append(subInfo, fmt.Sprintf("Standard/Weak parameter: %s (%s)", arg, desc))
-				if strings.Contains(desc, "-10") {
-					score -= 10
-				} else if strings.Contains(desc, "-5") {
-					score -= 5
-				} else if strings.Contains(desc, "-3") {
-					score -= 3
-				} else if strings.Contains(desc, "-2") {
-					score -= 2
-				} else {
-					score -= 1
-				}
+				subInfo = append(subInfo, fmt.Sprintf("Weak parameter: %s (%s)", arg, desc))
+				if strings.Contains(desc, "-10") { score -= 10 } else if strings.Contains(desc, "-5") { score -= 5 } else if strings.Contains(desc, "-3") { score -= 3 } else if strings.Contains(desc, "-2") { score -= 2 } else { score -= 1 }
 			}
 		}
 	}
 
-	// Check 2: Lockdown Mode (Direct check)
+	// Check 2: Kernel Configuration (Compiled-in hardening)
+	if config != nil {
+		hardeningConfigs := map[string]string{
+			"CONFIG_INIT_ON_ALLOC_DEFAULT_ON":    "Zeroes memory on allocation (+2)",
+			"CONFIG_INIT_ON_FREE_DEFAULT_ON":     "Zeroes memory on free (+2)",
+			"CONFIG_HARDENED_USERCOPY":           "Enables hardened usercopy (+2)",
+			"CONFIG_FORTIFY_SOURCE":              "Enables FORTIFY_SOURCE (+1)",
+			"CONFIG_SLAB_FREELIST_RANDOM":        "Randomizes SLAB freelist (+1)",
+			"CONFIG_SLAB_FREELIST_HARDENED":      "Hardens SLAB freelist (+2)",
+			"CONFIG_GCC_PLUGIN_STACKLEAK":       "Enables STACKLEAK plugin (+2)",
+			"CONFIG_RANDOMIZE_KSTACK_OFFSET_ALL": "Randomizes kernel stack offset (+2)",
+			"CONFIG_PAGE_TABLE_ISOLATION":        "Enables PTI (+1)",
+			"CONFIG_RETPOLINE":                   "Enables Retpoline (+1)",
+			"CONFIG_LEGACY_VSYSCALL_NONE":        "Disables legacy vsyscalls (+2)",
+			"CONFIG_STRICT_KERNEL_RWX":           "Enables strict kernel RWX (+1)",
+			"CONFIG_STRICT_MODULE_RWX":           "Enables strict module RWX (+1)",
+		}
+		for cfg, desc := range hardeningConfigs {
+			if val, ok := config[cfg]; ok && (val == "y" || val == "1") {
+				subInfo = append(subInfo, fmt.Sprintf("Kernel Config: %s=y (%s)", cfg, desc))
+				if strings.Contains(desc, "+2") { score += 2 } else { score += 1 }
+			}
+		}
+	} else {
+		subInfo = append(subInfo, "Kernel config unavailable for analysis (/proc/config.gz missing)")
+	}
+
+	// Check 3: Lockdown Mode
 	lockdownBytes, err := ioutil.ReadFile("/sys/kernel/security/lockdown")
 	if err == nil {
 		lockdownContent := string(lockdownBytes)
 		if strings.Contains(lockdownContent, "[integrity]") {
-			subInfo = append(subInfo, "Lockdown mode enabled (+2 points): integrity")
+			subInfo = append(subInfo, "Lockdown mode: integrity (+2)")
 			score += 2
 		} else if strings.Contains(lockdownContent, "[confidentiality]") {
-			subInfo = append(subInfo, "Lockdown mode enabled (+3 points): confidentiality")
+			subInfo = append(subInfo, "Lockdown mode: confidentiality (+3)")
 			score += 3
 		} else if strings.Contains(lockdownContent, "[none]") {
-			subInfo = append(subInfo, "Lockdown mode explicitly disabled (-1 point)")
+			subInfo = append(subInfo, "Lockdown mode explicitly disabled (-1)")
 			score -= 1
 		}
 	}
 
-	// Check 3: Specific Hardening Sysctls
+	// Check 4: Specific Hardening Sysctls
 	if _, err := os.Stat("/proc/sys/kernel/pax"); err == nil {
-		subInfo = append(subInfo, "PaX sysctl directory detected (+5 points)")
+		subInfo = append(subInfo, "PaX sysctl directory detected (+5)")
 		score += 5
 	}
 	if _, err := os.Stat("/proc/sys/kernel/grsecurity"); err == nil {
-		subInfo = append(subInfo, "Grsecurity sysctl directory detected (+5 points)")
+		subInfo = append(subInfo, "Grsecurity sysctl directory detected (+5)")
 		score += 5
 	}
 
-	// Check 4: Version string as a MINOR hint only if score is already high, 
-	// but we won't add points for it anymore. Instead, we just use it for the display.
 	out, _ := exec.Command("uname", "-r").Output()
 	version := strings.TrimSpace(string(out))
 
 	// Determine Result
-	status := "No (Standard kernel)"
+	maxScore := 30 
+	percentage := (score * 100) / maxScore
+	if percentage > 100 { percentage = 100 }
+	if percentage < 0 { percentage = 0 }
+
+	status := fmt.Sprintf("No (%d%% Hardened)", percentage)
 	color := ColorRed
 	weight := 2
 
-	maxScore := 20 // Target score for 100% hardening
-	percentage := (score * 100) / maxScore
-	if percentage > 100 {
-		percentage = 100
-	}
-	if percentage < 0 {
-		percentage = 0
-	}
-
-	if score >= 3 {
+	if score >= 10 {
 		status = fmt.Sprintf("Yes (%d%% Hardened)", percentage)
 		color = ColorGreen
 		weight = 0
@@ -289,40 +306,22 @@ func checkHardenedKernel() Result {
 		status = fmt.Sprintf("Partial (%d%% Hardened)", percentage)
 		color = ColorYellow
 		weight = 1
-	} else if score < 0 {
-		status = fmt.Sprintf("Weak/Insecure (%d%% Hardened)", percentage)
-		color = ColorRed
-		weight = 2
-	}
-
-	if len(subInfo) == 0 {
-		return Result{"[-]", "Hardened Kernel", "No (0% Hardened)", ColorRed, 2, []string{"No hardening indicators found in boot parameters or sysctls."}}
 	}
 
 	subInfo = append([]string{
 		fmt.Sprintf("Kernel: %s", version),
 		fmt.Sprintf("Confidence Score: %d/%d points (%d%%)", score, maxScore, percentage),
-		"Score is based on real-time boot parameters and kernel security features.",
+		"Score accounts for both boot parameters and compiled-in kernel defaults.",
 	}, subInfo...)
 
-	return Result{
-		Prefix:      getPrefix(weight),
-		Description: "Hardened Kernel",
-		Status:      status,
-		Color:       color,
-		SortWeight:  weight,
-		SubInfo:     subInfo,
-	}
+	return Result{getPrefix(weight), "Hardened Kernel", status, color, weight, subInfo}
 }
 
 func getPrefix(weight int) string {
 	switch weight {
-	case 0:
-		return "[+]"
-	case 1:
-		return "[!]"
-	default:
-		return "[-]"
+	case 0: return "[+]"
+	case 1: return "[!]"
+	default: return "[-]"
 	}
 }
 
@@ -355,24 +354,13 @@ func checkAppArmor() Result {
 	return Result{"[-]", "AppArmor", "Not found", ColorRed, 2, nil}
 }
 
-func checkKernelConfig() {
-	f, err := os.Open("/proc/config.gz")
-	if err != nil {
+func checkKernelConfig(found map[string]string) {
+	if found == nil {
 		fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
 		fmt.Println("-------------------------------")
-		fmt.Printf("%s[-] %-40s: %s%s\n", ColorRed, "Kernel Config Checks", "Could not open /proc/config.gz", ColorReset)
+		fmt.Printf("%s[-] %-40s: %s%s\n", ColorRed, "Kernel Config Checks", "Could not read /proc/config.gz", ColorReset)
 		return
 	}
-	defer f.Close()
-
-	gz, err := gzip.NewReader(f)
-	if err != nil {
-		fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
-		fmt.Println("-------------------------------")
-		fmt.Printf("%s[-] %-40s: %s%s\n", ColorRed, "Kernel Config Checks", "Could not decompress /proc/config.gz", ColorReset)
-		return
-	}
-	defer gz.Close()
 
 	configs := map[string]string{
 		"CONFIG_GCC_PLUGIN_STACKLEAK":       "y",
@@ -383,17 +371,11 @@ func checkKernelConfig() {
 		"CONFIG_FORTIFY_SOURCE":              "y",
 		"CONFIG_SLAB_FREELIST_RANDOM":        "y",
 		"CONFIG_SLAB_FREELIST_HARDENED":      "y",
-	}
-
-	found := make(map[string]string)
-	scanner := bufio.NewScanner(gz)
-	for scanner.Scan() {
-		line := scanner.Text()
-		for cfg := range configs {
-			if strings.HasPrefix(line, cfg+"=") {
-				found[cfg] = strings.Split(line, "=")[1]
-			}
-		}
+		"CONFIG_PAGE_TABLE_ISOLATION":        "y",
+		"CONFIG_RETPOLINE":                   "y",
+		"CONFIG_LEGACY_VSYSCALL_NONE":        "y",
+		"CONFIG_STRICT_KERNEL_RWX":           "y",
+		"CONFIG_STRICT_MODULE_RWX":           "y",
 	}
 
 	var results []Result
