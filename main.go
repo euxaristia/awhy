@@ -11,17 +11,26 @@ import (
 	"strings"
 )
 
+const (
+	ColorReset  = "\033[0m"
+	ColorRed    = "\033[31m"
+	ColorGreen  = "\033[32m"
+	ColorYellow = "\033[33m"
+	ColorBlue   = "\033[34m"
+	ColorCyan   = "\033[36m"
+	ColorBold   = "\033[1m"
+)
+
 func main() {
-	fmt.Println("Are We Hardened Yet? - Linux Security Mitigation Checker")
-	fmt.Println("========================================================")
+	printHeader()
 
 	if runtime.GOOS != "linux" {
-		fmt.Println("Error: This tool is designed for Linux systems only.")
+		fmt.Printf("%sError: This tool is designed for Linux systems only.%s\n", ColorRed, ColorReset)
 		os.Exit(1)
 	}
 
 	if os.Geteuid() != 0 {
-		fmt.Println("[!] Warning: Not running as root. Some checks may fail or be inaccurate.")
+		fmt.Printf("%s[!] Warning: Not running as root. Some checks may fail or be inaccurate.%s\n", ColorYellow, ColorReset)
 		fmt.Println()
 	}
 
@@ -37,17 +46,36 @@ func main() {
 	checkKernelConfig()
 }
 
+func printHeader() {
+	header := `
+    ___                  _  _  _                 _ __   __     _   
+   / _ \                | || || |               | |\ \ / /    | |  
+  / /_\ \ _ __  ___     | || || |__    __ _ _ __| | \ V /  ___| |_ 
+  |  _  || '__|/ _ \    | || || '_ \  / _' | '__| |  \ /  / _ \ __|
+  | | | || |  |  __/    | || || | | || (_| | |  | |  | | |  __/ |_ 
+  \_| |_/|_|   \___|    |_||_||_| |_| \__,_|_|  |_|  \_/  \___|\__|
+                                                                   
+`
+	fmt.Printf("%s%s%s", ColorCyan, header, ColorReset)
+	fmt.Printf("%sAre We Hardened Yet? - Linux Security Mitigation Checker%s\n", ColorBold, ColorReset)
+	fmt.Println("========================================================")
+}
+
+func printStatus(prefix string, description string, status string, color string) {
+	fmt.Printf("%s%s %-30s: %s%s\n", color, prefix, description, status, ColorReset)
+}
+
 func checkFileValue(path string, expected string, description string) {
 	content, err := ioutil.ReadFile(path)
 	if err != nil {
-		fmt.Printf("[-] %-30s: Could not read %s\n", description, path)
+		printStatus("[-]", description, "Could not read "+path, ColorRed)
 		return
 	}
 	val := strings.TrimSpace(string(content))
 	if val == expected {
-		fmt.Printf("[+] %-30s: Enabled (%s)\n", description, val)
+		printStatus("[+]", description, "Enabled ("+val+")", ColorGreen)
 	} else {
-		fmt.Printf("[!] %-30s: Disabled or weak (%s)\n", description, val)
+		printStatus("[!]", description, "Disabled or weak ("+val+")", ColorYellow)
 	}
 }
 
@@ -56,9 +84,9 @@ func checkKernelName() {
 	if err == nil {
 		version := strings.ToLower(string(out))
 		if strings.Contains(version, "hardened") {
-			fmt.Printf("[+] %-30s: Yes (%s)\n", "Hardened Kernel", strings.TrimSpace(string(out)))
+			printStatus("[+]", "Hardened Kernel", "Yes ("+strings.TrimSpace(string(out))+")", ColorGreen)
 		} else {
-			fmt.Printf("[-] %-30s: No (Standard kernel)\n", "Hardened Kernel")
+			printStatus("[-]", "Hardened Kernel", "No (Standard kernel)", ColorRed)
 		}
 	}
 }
@@ -85,15 +113,15 @@ func checkSELinux() {
 		content, err := ioutil.ReadFile("/sys/fs/selinux/enforce")
 		if err == nil {
 			if strings.TrimSpace(string(content)) == "1" {
-				fmt.Printf("[+] %-30s: Enabled (Enforcing)\n", "SELinux")
+				printStatus("[+]", "SELinux", "Enabled (Enforcing)", ColorGreen)
 			} else {
-				fmt.Printf("[!] %-30s: Enabled (Permissive)\n", "SELinux")
+				printStatus("[!]", "SELinux", "Enabled (Permissive)", ColorYellow)
 			}
 			return
 		}
-		fmt.Printf("[+] %-30s: Present\n", "SELinux")
+		printStatus("[+]", "SELinux", "Present", ColorGreen)
 	} else {
-		fmt.Printf("[-] %-30s: Not found\n", "SELinux")
+		printStatus("[-]", "SELinux", "Not found", ColorRed)
 	}
 }
 
@@ -102,12 +130,12 @@ func checkAppArmor() {
 	if err == nil {
 		content, err := ioutil.ReadFile("/sys/module/apparmor/parameters/enabled")
 		if err == nil && strings.TrimSpace(string(content)) == "Y" {
-			fmt.Printf("[+] %-30s: Enabled\n", "AppArmor")
+			printStatus("[+]", "AppArmor", "Enabled", ColorGreen)
 		} else {
-			fmt.Printf("[!] %-30s: Present but disabled\n", "AppArmor")
+			printStatus("[!]", "AppArmor", "Present but disabled", ColorYellow)
 		}
 	} else {
-		fmt.Printf("[-] %-30s: Not found\n", "AppArmor")
+		printStatus("[-]", "AppArmor", "Not found", ColorRed)
 	}
 }
 
@@ -125,14 +153,14 @@ func checkFsProtections() {
 func checkKernelConfig() {
 	f, err := os.Open("/proc/config.gz")
 	if err != nil {
-		fmt.Printf("[-] %-30s: Could not open /proc/config.gz\n", "Kernel Config Checks")
+		printStatus("[-]", "Kernel Config Checks", "Could not open /proc/config.gz", ColorRed)
 		return
 	}
 	defer f.Close()
 
 	gz, err := gzip.NewReader(f)
 	if err != nil {
-		fmt.Printf("[-] %-30s: Could not decompress /proc/config.gz\n", "Kernel Config Checks")
+		printStatus("[-]", "Kernel Config Checks", "Could not decompress /proc/config.gz", ColorRed)
 		return
 	}
 	defer gz.Close()
@@ -159,16 +187,16 @@ func checkKernelConfig() {
 		}
 	}
 
-	fmt.Println("\nKernel Configuration Hardening:")
+	fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
 	fmt.Println("-------------------------------")
 	for cfg, expected := range configs {
 		val, ok := found[cfg]
 		if ok && val == expected {
-			fmt.Printf("[+] %-30s: Enabled (%s)\n", cfg, val)
+			printStatus("[+]", cfg, "Enabled ("+val+")", ColorGreen)
 		} else if ok {
-			fmt.Printf("[!] %-30s: Disabled or different (%s)\n", cfg, val)
+			printStatus("[!]", cfg, "Disabled or different ("+val+")", ColorYellow)
 		} else {
-			fmt.Printf("[-] %-30s: Not set\n", cfg)
+			printStatus("[-]", cfg, "Not set", ColorRed)
 		}
 	}
 }
