@@ -869,8 +869,8 @@ func TestPrintHeader(t *testing.T) {
 	buf.ReadFrom(r)
 	output := buf.String()
 
-	if !strings.Contains(output, "AreWeHardYet") {
-		t.Error("header should contain AreWeHardYet")
+	if !strings.Contains(output, "awhy") {
+		t.Error("header should contain awhy")
 	}
 	if !strings.Contains(output, "Linux Security Mitigation Checker") {
 		t.Error("header should contain subtitle")
@@ -1199,5 +1199,17 @@ func TestCheckHardenedKernel_SubInfoOrder(t *testing.T) {
 	}
 	if !strings.HasPrefix(r.SubInfo[2], "Score accounts") {
 		t.Errorf("third subinfo should be Score description, got: %s", r.SubInfo[2])
+	}
+}
+
+func TestCheckCPUVulnerabilities_ReturnsResult(t *testing.T) {
+	r := checkCPUVulnerabilities()
+	if r.Description != "CPU Mitigations" {
+		t.Errorf("unexpected description: %s", r.Description)
+	}
+	// On most modern Linux systems this should return a result
+	// Valid prefixes are [+], [!], [-]
+	if r.Prefix != "[+]" && r.Prefix != "[!]" && r.Prefix != "[-]" {
+		t.Errorf("unexpected prefix: %s", r.Prefix)
 	}
 }

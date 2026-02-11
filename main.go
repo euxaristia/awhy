@@ -99,6 +99,7 @@ func main() {
 	generalResults = append(generalResults, checkLockdownLSM())
 	generalResults = append(generalResults, checkCoreDumpConfig())
 	generalResults = append(generalResults, checkUserNamespaces(config))
+	generalResults = append(generalResults, checkCPUVulnerabilities())
 
 	sortAndPrintResults(generalResults)
 
@@ -114,7 +115,7 @@ func printHeader() {
 /_/   \_\_|  \___|    \_/\_/ \___|  |_| |_|\__,_|_|  \__,_|   |_|\___|\__|
 `
 	fmt.Printf("%s%s%s", ColorCyan, header, ColorReset)
-	fmt.Printf("%sAreWeHardYet - Linux Security Mitigation Checker%s\n", ColorBold, ColorReset)
+	fmt.Printf("%sawhy - Linux Security Mitigation Checker%s\n", ColorBold, ColorReset)
 	fmt.Println("========================================================")
 }
 
@@ -141,6 +142,8 @@ func sortAndPrintResults(results []Result) {
 				return 20
 			case "Secure Boot":
 				return 21
+			case "CPU Mitigations":
+				return 2
 			default:
 				return 5 // General checks in between
 			}
@@ -1051,4 +1054,67 @@ func checkGnomeHSI() Result {
 	}
 
 	return Result{"[-]", "GNOME HSI", "Unavailable (fwupdtool not found)", ColorRed, 2, nil}
+}
+
+func checkCPUVulnerabilities() Result {
+	dir := "/sys/devices/system/cpu/vulnerabilities"
+	files, err := ioutil.ReadDir(dir)
+	if err != nil {
+		status := "Not available"
+		if os.IsNotExist(err) {
+			status = "Not found (Old kernel?)"
+		} else if isPermissionDenied(err) {
+			status = "Requires root"
+		}
+		return Result{"[-]", "CPU Mitigations", status, ColorRed, 2, nil}
+	}
+
+	var subInfo []string
+	mitigatedCount := 0
+	vulnerableCount := 0
+	totalCount := 0
+
+	for _, file := range files {
+		if file.IsDir() {
+			continue
+		}
+		totalCount++
+		name := file.Name()
+		content, err := ioutil.ReadFile(dir + "/" + name)
+		if err != nil {
+			subInfo = append(subInfo, fmt.Sprintf("%s: Could not read", name))
+			continue
+		}
+		status := strings.TrimSpace(string(content))
+		subInfo = append(subInfo, fmt.Sprintf("%s: %s", name, status))
+
+		statusLower := strings.ToLower(status)
+		if strings.Contains(statusLower, "mitigation") || strings.Contains(statusLower, "not affected") {
+			mitigatedCount++
+		} else if strings.Contains(statusLower, "vulnerable") {
+			vulnerableCount++
+		}
+	}
+
+	if totalCount == 0 {
+		return Result{"[-]", "CPU Mitigations", "No data found", ColorRed, 2, nil}
+	}
+
+	resStatus := fmt.Sprintf("%d/%d Mitigated", mitigatedCount, totalCount)
+	color := ColorGreen
+	weight := 0
+	prefix := "[+]"
+
+	if vulnerableCount > 0 {
+		resStatus = fmt.Sprintf("%d Vulnerable", vulnerableCount)
+		color = ColorRed
+		weight = 2
+		prefix = "[-]"
+	} else if mitigatedCount < totalCount {
+		color = ColorYellow
+		weight = 1
+		prefix = "[!]"
+	}
+
+	return Result{prefix, "CPU Mitigations", resStatus, color, weight, subInfo}
 }
