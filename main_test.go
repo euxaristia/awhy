@@ -66,7 +66,7 @@ func TestGetSysctlResult_MatchesExpected(t *testing.T) {
 	if r.Prefix != "[+]" {
 		t.Errorf("expected [+], got %s", r.Prefix)
 	}
-	if r.Color != ColorGreen {
+	if r.Colour != ColourGreen {
 		t.Error("expected green")
 	}
 	if r.SortWeight != 0 {
@@ -86,7 +86,7 @@ func TestGetSysctlResult_DoesNotMatchExpected(t *testing.T) {
 	if r.Prefix != "[!]" {
 		t.Errorf("expected [!], got %s", r.Prefix)
 	}
-	if r.Color != ColorYellow {
+	if r.Colour != ColourYellow {
 		t.Error("expected yellow")
 	}
 	if r.SortWeight != 1 {
@@ -450,11 +450,11 @@ func TestCheckHardenedKernel_EmptyConfig(t *testing.T) {
 
 func TestSortAndPrintResults_Priority(t *testing.T) {
 	results := []Result{
-		{Prefix: "[+]", Description: "Secure Boot", Status: "Enabled", Color: ColorGreen, SortWeight: 0},
-		{Prefix: "[+]", Description: "Hardened Kernel", Status: "Yes", Color: ColorGreen, SortWeight: 0},
-		{Prefix: "[+]", Description: "ASLR", Status: "Full", Color: ColorGreen, SortWeight: 0},
-		{Prefix: "[-]", Description: "AppArmor", Status: "Not found", Color: ColorRed, SortWeight: 2},
-		{Prefix: "[+]", Description: "Landlock LSM", Status: "Active", Color: ColorGreen, SortWeight: 0},
+		{Prefix: "[+]", Description: "Secure Boot", Status: "Enabled", Colour: ColourGreen, SortWeight: 0},
+		{Prefix: "[+]", Description: "Hardened Kernel", Status: "Yes", Colour: ColourGreen, SortWeight: 0},
+		{Prefix: "[+]", Description: "ASLR", Status: "Full", Colour: ColourGreen, SortWeight: 0},
+		{Prefix: "[-]", Description: "AppArmor", Status: "Not found", Colour: ColourRed, SortWeight: 2},
+		{Prefix: "[+]", Description: "Landlock LSM", Status: "Active", Colour: ColourGreen, SortWeight: 0},
 	}
 
 	// Capture output
@@ -1107,7 +1107,7 @@ func TestResultStruct(t *testing.T) {
 		Prefix:      "[+]",
 		Description: "Test Check",
 		Status:      "Enabled",
-		Color:       ColorGreen,
+		Colour:       ColourGreen,
 		SortWeight:  0,
 		SubInfo:     []string{"info1", "info2"},
 	}
@@ -1120,8 +1120,8 @@ func TestResultStruct(t *testing.T) {
 	if r.Status != "Enabled" {
 		t.Error("status mismatch")
 	}
-	if r.Color != ColorGreen {
-		t.Error("color mismatch")
+	if r.Colour != ColourGreen {
+		t.Error("colour mismatch")
 	}
 	if r.SortWeight != 0 {
 		t.Error("weight mismatch")
@@ -1131,29 +1131,29 @@ func TestResultStruct(t *testing.T) {
 	}
 }
 
-// --- Color constants ---
+// --- Colour constants ---
 
-func TestColorConstants(t *testing.T) {
-	if ColorReset != "\033[0m" {
-		t.Error("ColorReset mismatch")
+func TestColourConstants(t *testing.T) {
+	if ColourReset != "\033[0m" {
+		t.Error("ColourReset mismatch")
 	}
-	if ColorRed != "\033[31m" {
-		t.Error("ColorRed mismatch")
+	if ColourRed != "\033[31m" {
+		t.Error("ColourRed mismatch")
 	}
-	if ColorGreen != "\033[32m" {
-		t.Error("ColorGreen mismatch")
+	if ColourGreen != "\033[32m" {
+		t.Error("ColourGreen mismatch")
 	}
-	if ColorYellow != "\033[33m" {
-		t.Error("ColorYellow mismatch")
+	if ColourYellow != "\033[33m" {
+		t.Error("ColourYellow mismatch")
 	}
-	if ColorBlue != "\033[34m" {
-		t.Error("ColorBlue mismatch")
+	if ColourBlue != "\033[34m" {
+		t.Error("ColourBlue mismatch")
 	}
-	if ColorCyan != "\033[36m" {
-		t.Error("ColorCyan mismatch")
+	if ColourCyan != "\033[36m" {
+		t.Error("ColourCyan mismatch")
 	}
-	if ColorBold != "\033[1m" {
-		t.Error("ColorBold mismatch")
+	if ColourBold != "\033[1m" {
+		t.Error("ColourBold mismatch")
 	}
 }
 

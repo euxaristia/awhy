@@ -13,20 +13,20 @@ import (
 )
 
 const (
-	ColorReset  = "\033[0m"
-	ColorRed    = "\033[31m"
-	ColorGreen  = "\033[32m"
-	ColorYellow = "\033[33m"
-	ColorBlue   = "\033[34m"
-	ColorCyan   = "\033[36m"
-	ColorBold   = "\033[1m"
+	ColourReset  = "\033[0m"
+	ColourRed    = "\033[31m"
+	ColourGreen  = "\033[32m"
+	ColourYellow = "\033[33m"
+	ColourBlue   = "\033[34m"
+	ColourCyan   = "\033[36m"
+	ColourBold   = "\033[1m"
 )
 
 type Result struct {
 	Prefix      string
 	Description string
 	Status      string
-	Color       string
+	Colour      string
 	SortWeight  int      // 0 for [+], 1 for [!], 2 for [-]
 	SubInfo     []string // Additional details to display
 }
@@ -35,12 +35,12 @@ func main() {
 	printHeader()
 
 	if runtime.GOOS != "linux" {
-		fmt.Printf("%sError: This tool is designed for Linux systems only.%s\n", ColorRed, ColorReset)
+		fmt.Printf("%sError: This tool is designed for Linux systems only.%s\n", ColourRed, ColourReset)
 		os.Exit(1)
 	}
 
 	if os.Geteuid() != 0 {
-		fmt.Printf("%s[!] Warning: Not running as root. Some checks may fail or be inaccurate.%s\n", ColorYellow, ColorReset)
+		fmt.Printf("%s[!] Warning: Not running as root. Some checks may fail or be inaccurate.%s\n", ColourYellow, ColourReset)
 		fmt.Println()
 	}
 
@@ -114,8 +114,8 @@ func printHeader() {
  / ___ \| | |  __/   \ V  V /  __/  |  _  | (_| | | | (_| |   | |  __/ |_
 /_/   \_\_|  \___|    \_/\_/ \___|  |_| |_|\__,_|_|  \__,_|   |_|\___|\__|
 `
-	fmt.Printf("%s%s%s", ColorCyan, header, ColorReset)
-	fmt.Printf("%sawhy - Linux Security Mitigation Checker%s\n", ColorBold, ColorReset)
+	fmt.Printf("%s%s%s", ColourCyan, header, ColourReset)
+	fmt.Printf("%sawhy - Linux Security Mitigation Checker%s\n", ColourBold, ColourReset)
 	fmt.Println("========================================================")
 }
 
@@ -164,7 +164,7 @@ func sortAndPrintResults(results []Result) {
 	})
 
 	for _, r := range results {
-		fmt.Printf("%s%s %-40s: %s%s\n", r.Color, r.Prefix, r.Description, r.Status, ColorReset)
+		fmt.Printf("%s%s %-40s: %s%s\n", r.Colour, r.Prefix, r.Description, r.Status, ColourReset)
 		for i, info := range r.SubInfo {
 			connector := "├──"
 			if i == len(r.SubInfo)-1 {
@@ -184,7 +184,7 @@ func getSysctlResult(path string, expected string, description string, mapping m
 		} else if os.IsNotExist(err) {
 			status = "Not available (sysctl not present)"
 		}
-		return Result{"[-]", description, status, ColorRed, 2, nil}
+		return Result{"[-]", description, status, ColourRed, 2, nil}
 	}
 	val := strings.TrimSpace(string(content))
 	statusText, ok := mapping[val]
@@ -194,9 +194,9 @@ func getSysctlResult(path string, expected string, description string, mapping m
 
 	status := fmt.Sprintf("%s (%s)", statusText, val)
 	if val == expected {
-		return Result{"[+]", description, status, ColorGreen, 0, nil}
+		return Result{"[+]", description, status, ColourGreen, 0, nil}
 	} else {
-		return Result{"[!]", description, status, ColorYellow, 1, nil}
+		return Result{"[!]", description, status, ColourYellow, 1, nil}
 	}
 }
 
@@ -472,16 +472,16 @@ func checkHardenedKernel(config map[string]string, configErr error) Result {
 	}
 
 	status := fmt.Sprintf("No (%d%% Hardened)", percentage)
-	color := ColorRed
+	colour := ColourRed
 	weight := 2
 
 	if percentage >= 50 {
 		status = fmt.Sprintf("Yes (%d%% Hardened)", percentage)
-		color = ColorGreen
+		colour = ColourGreen
 		weight = 0
 	} else if percentage >= 20 {
 		status = fmt.Sprintf("Partial (%d%% Hardened)", percentage)
-		color = ColorYellow
+		colour = ColourYellow
 		weight = 1
 	}
 
@@ -491,7 +491,7 @@ func checkHardenedKernel(config map[string]string, configErr error) Result {
 		"Score accounts for boot parameters, compiled-in kernel hardening, and runtime state.",
 	}, subInfo...)
 
-	return Result{getPrefix(weight), "Hardened Kernel", status, color, weight, subInfo}
+	return Result{getPrefix(weight), "Hardened Kernel", status, colour, weight, subInfo}
 }
 
 func getPrefix(weight int) string {
@@ -514,15 +514,15 @@ func checkSELinux() Result {
 			if isPermissionDenied(err) {
 				status = "Requires root"
 			}
-			return Result{"[+]", "NSA SELinux", status, ColorGreen, 0, nil}
+			return Result{"[+]", "NSA SELinux", status, ColourGreen, 0, nil}
 		}
 		if strings.TrimSpace(string(content)) == "1" {
-			return Result{"[+]", "NSA SELinux", "Enabled (Enforcing)", ColorGreen, 0, nil}
+			return Result{"[+]", "NSA SELinux", "Enabled (Enforcing)", ColourGreen, 0, nil}
 		} else {
-			return Result{"[!]", "NSA SELinux", "Enabled (Permissive)", ColorYellow, 1, nil}
+			return Result{"[!]", "NSA SELinux", "Enabled (Permissive)", ColourYellow, 1, nil}
 		}
 	}
-	return Result{"[-]", "NSA SELinux", "Not found", ColorRed, 2, nil}
+	return Result{"[-]", "NSA SELinux", "Not found", ColourRed, 2, nil}
 }
 
 func checkAppArmor() Result {
@@ -534,15 +534,15 @@ func checkAppArmor() Result {
 			if isPermissionDenied(err) {
 				status = "Requires root"
 			}
-			return Result{"[!]", "AppArmor", status, ColorYellow, 1, nil}
+			return Result{"[!]", "AppArmor", status, ColourYellow, 1, nil}
 		}
 		if strings.TrimSpace(string(content)) == "Y" {
-			return Result{"[+]", "AppArmor", "Enabled", ColorGreen, 0, nil}
+			return Result{"[+]", "AppArmor", "Enabled", ColourGreen, 0, nil}
 		} else {
-			return Result{"[!]", "AppArmor", "Present but disabled", ColorYellow, 1, nil}
+			return Result{"[!]", "AppArmor", "Present but disabled", ColourYellow, 1, nil}
 		}
 	}
-	return Result{"[-]", "AppArmor", "Not found", ColorRed, 2, nil}
+	return Result{"[-]", "AppArmor", "Not found", ColourRed, 2, nil}
 }
 
 func checkLandlock() Result {
@@ -552,54 +552,54 @@ func checkLandlock() Result {
 		content, err := ioutil.ReadFile("/sys/kernel/security/landlock/abi_version")
 		if err == nil {
 			ver := strings.TrimSpace(string(content))
-			return Result{"[+]", "Landlock LSM", fmt.Sprintf("Enabled (ABI v%s)", ver), ColorGreen, 0, nil}
+			return Result{"[+]", "Landlock LSM", fmt.Sprintf("Enabled (ABI v%s)", ver), ColourGreen, 0, nil}
 		}
-		return Result{"[+]", "Landlock LSM", "Enabled", ColorGreen, 0, nil}
+		return Result{"[+]", "Landlock LSM", "Enabled", ColourGreen, 0, nil}
 	}
 	// Check if compiled in but not active
 	lsmBytes, _ := ioutil.ReadFile("/sys/kernel/security/lsm")
 	if lsmBytes != nil && strings.Contains(string(lsmBytes), "landlock") {
-		return Result{"[+]", "Landlock LSM", "Active", ColorGreen, 0, nil}
+		return Result{"[+]", "Landlock LSM", "Active", ColourGreen, 0, nil}
 	}
-	return Result{"[-]", "Landlock LSM", "Not available", ColorRed, 2, nil}
+	return Result{"[-]", "Landlock LSM", "Not available", ColourRed, 2, nil}
 }
 
 func checkLockdownLSM() Result {
 	content, err := ioutil.ReadFile("/sys/kernel/security/lockdown")
 	if err != nil {
 		if isPermissionDenied(err) {
-			return Result{"[-]", "Lockdown LSM", "Requires root", ColorRed, 2, nil}
+			return Result{"[-]", "Lockdown LSM", "Requires root", ColourRed, 2, nil}
 		}
-		return Result{"[-]", "Lockdown LSM", "Not available", ColorRed, 2, nil}
+		return Result{"[-]", "Lockdown LSM", "Not available", ColourRed, 2, nil}
 	}
 	lockdown := strings.TrimSpace(string(content))
 	if strings.Contains(lockdown, "[confidentiality]") {
-		return Result{"[+]", "Lockdown LSM", "Confidentiality mode", ColorGreen, 0, nil}
+		return Result{"[+]", "Lockdown LSM", "Confidentiality mode", ColourGreen, 0, nil}
 	} else if strings.Contains(lockdown, "[integrity]") {
-		return Result{"[+]", "Lockdown LSM", "Integrity mode", ColorGreen, 0, nil}
+		return Result{"[+]", "Lockdown LSM", "Integrity mode", ColourGreen, 0, nil}
 	}
-	return Result{"[!]", "Lockdown LSM", fmt.Sprintf("None (%s)", lockdown), ColorYellow, 1, nil}
+	return Result{"[!]", "Lockdown LSM", fmt.Sprintf("None (%s)", lockdown), ColourYellow, 1, nil}
 }
 
 func checkSeccomp() Result {
 	content, err := ioutil.ReadFile("/proc/sys/kernel/seccomp/actions_avail")
 	if err == nil {
 		actions := strings.TrimSpace(string(content))
-		return Result{"[+]", "Seccomp", fmt.Sprintf("Available (%s)", actions), ColorGreen, 0, nil}
+		return Result{"[+]", "Seccomp", fmt.Sprintf("Available (%s)", actions), ColourGreen, 0, nil}
 	}
 	// Fallback: check boot config
 	if _, err := os.Stat("/proc/1/status"); err == nil {
 		statusBytes, err := ioutil.ReadFile("/proc/1/status")
 		if err == nil && strings.Contains(string(statusBytes), "Seccomp:") {
-			return Result{"[+]", "Seccomp", "Available (detected via /proc)", ColorGreen, 0, nil}
+			return Result{"[+]", "Seccomp", "Available (detected via /proc)", ColourGreen, 0, nil}
 		}
 	}
-	return Result{"[-]", "Seccomp", "Not available", ColorRed, 2, nil}
+	return Result{"[-]", "Seccomp", "Not available", ColourRed, 2, nil}
 }
 
 func checkModuleSigning(config map[string]string) Result {
 	if config == nil {
-		return Result{"[-]", "Module Signing", "Requires /proc/config.gz", ColorRed, 2, nil}
+		return Result{"[-]", "Module Signing", "Requires /proc/config.gz", ColourRed, 2, nil}
 	}
 
 	sigEnabled := config["CONFIG_MODULE_SIG"] == "y"
@@ -607,7 +607,7 @@ func checkModuleSigning(config map[string]string) Result {
 	sigHash := config["CONFIG_MODULE_SIG_HASH"]
 
 	if !sigEnabled {
-		return Result{"[-]", "Module Signing", "Not enabled", ColorRed, 2, nil}
+		return Result{"[-]", "Module Signing", "Not enabled", ColourRed, 2, nil}
 	}
 
 	var subInfo []string
@@ -623,18 +623,18 @@ func checkModuleSigning(config map[string]string) Result {
 
 	if sigForce {
 		subInfo = append(subInfo, "Enforcement: mandatory (unsigned modules rejected)")
-		return Result{"[+]", "Module Signing", "Enforced", ColorGreen, 0, subInfo}
+		return Result{"[+]", "Module Signing", "Enforced", ColourGreen, 0, subInfo}
 	}
 
 	subInfo = append(subInfo, "Enforcement: optional (unsigned modules allowed with taint)")
-	return Result{"[!]", "Module Signing", "Enabled (not enforced)", ColorYellow, 1, subInfo}
+	return Result{"[!]", "Module Signing", "Enabled (not enforced)", ColourYellow, 1, subInfo}
 }
 
 func checkCoreDumpConfig() Result {
 	// Check core_pattern
 	content, err := ioutil.ReadFile("/proc/sys/kernel/core_pattern")
 	if err != nil {
-		return Result{"[-]", "Core Dump Restrict", "Could not check", ColorRed, 2, nil}
+		return Result{"[-]", "Core Dump Restrict", "Could not check", ColourRed, 2, nil}
 	}
 	pattern := strings.TrimSpace(string(content))
 
@@ -654,7 +654,7 @@ func checkCoreDumpConfig() Result {
 						softLimit := fields[i+1]
 						subInfo = append(subInfo, fmt.Sprintf("Soft limit: %s", softLimit))
 						if softLimit == "0" {
-							return Result{"[+]", "Core Dump Restrict", "Disabled (limit=0)", ColorGreen, 0, subInfo}
+							return Result{"[+]", "Core Dump Restrict", "Disabled (limit=0)", ColourGreen, 0, subInfo}
 						}
 					}
 				}
@@ -664,10 +664,10 @@ func checkCoreDumpConfig() Result {
 
 	if strings.HasPrefix(pattern, "|") {
 		subInfo = append(subInfo, "Core dumps piped to handler")
-		return Result{"[!]", "Core Dump Restrict", "Piped to handler", ColorYellow, 1, subInfo}
+		return Result{"[!]", "Core Dump Restrict", "Piped to handler", ColourYellow, 1, subInfo}
 	}
 
-	return Result{"[!]", "Core Dump Restrict", "Enabled", ColorYellow, 1, subInfo}
+	return Result{"[!]", "Core Dump Restrict", "Enabled", ColourYellow, 1, subInfo}
 }
 
 func checkUserNamespaces(config map[string]string) Result {
@@ -679,7 +679,7 @@ func checkUserNamespaces(config map[string]string) Result {
 		val := strings.TrimSpace(string(content))
 		if val == "0" {
 			subInfo = append(subInfo, "unprivileged_userns_clone=0 (restricted)")
-			return Result{"[+]", "User Namespace Restrict", "Restricted", ColorGreen, 0, subInfo}
+			return Result{"[+]", "User Namespace Restrict", "Restricted", ColourGreen, 0, subInfo}
 		}
 		subInfo = append(subInfo, fmt.Sprintf("unprivileged_userns_clone=%s", val))
 	}
@@ -690,7 +690,7 @@ func checkUserNamespaces(config map[string]string) Result {
 		val := strings.TrimSpace(string(content))
 		subInfo = append(subInfo, fmt.Sprintf("max_user_namespaces=%s", val))
 		if val == "0" {
-			return Result{"[+]", "User Namespace Restrict", "Disabled (max=0)", ColorGreen, 0, subInfo}
+			return Result{"[+]", "User Namespace Restrict", "Disabled (max=0)", ColourGreen, 0, subInfo}
 		}
 	}
 
@@ -698,18 +698,18 @@ func checkUserNamespaces(config map[string]string) Result {
 	if config != nil {
 		if config["CONFIG_USER_NS_UNPRIVILEGED"] == "n" {
 			subInfo = append(subInfo, "CONFIG_USER_NS_UNPRIVILEGED is not set (restricted at compile time)")
-			return Result{"[+]", "User Namespace Restrict", "Compile-time restricted", ColorGreen, 0, subInfo}
+			return Result{"[+]", "User Namespace Restrict", "Compile-time restricted", ColourGreen, 0, subInfo}
 		}
 		if config["CONFIG_USER_NS"] == "y" && config["CONFIG_USER_NS_UNPRIVILEGED"] != "n" {
 			subInfo = append(subInfo, "User namespaces enabled, unprivileged access allowed")
-			return Result{"[!]", "User Namespace Restrict", "Unrestricted", ColorYellow, 1, subInfo}
+			return Result{"[!]", "User Namespace Restrict", "Unrestricted", ColourYellow, 1, subInfo}
 		}
 	}
 
 	if len(subInfo) > 0 {
-		return Result{"[!]", "User Namespace Restrict", "Partially restricted", ColorYellow, 1, subInfo}
+		return Result{"[!]", "User Namespace Restrict", "Partially restricted", ColourYellow, 1, subInfo}
 	}
-	return Result{"[-]", "User Namespace Restrict", "Could not determine", ColorRed, 2, nil}
+	return Result{"[-]", "User Namespace Restrict", "Could not determine", ColourRed, 2, nil}
 }
 
 func checkKexecDisabled(config map[string]string) Result {
@@ -717,20 +717,20 @@ func checkKexecDisabled(config map[string]string) Result {
 	if err == nil {
 		val := strings.TrimSpace(string(content))
 		if val == "1" {
-			return Result{"[+]", "kexec_load Disabled", "Disabled (1)", ColorGreen, 0, nil}
+			return Result{"[+]", "kexec_load Disabled", "Disabled (1)", ColourGreen, 0, nil}
 		}
-		return Result{"[!]", "kexec_load Disabled", "Allowed (0)", ColorYellow, 1, nil}
+		return Result{"[!]", "kexec_load Disabled", "Allowed (0)", ColourYellow, 1, nil}
 	}
 	// Sysctl missing — check if kexec was compiled out entirely (best outcome)
 	if config != nil {
 		if config["CONFIG_KEXEC"] != "y" && config["CONFIG_KEXEC_FILE"] != "y" {
-			return Result{"[+]", "kexec_load Disabled", "Not compiled in (CONFIG_KEXEC not set)", ColorGreen, 0, nil}
+			return Result{"[+]", "kexec_load Disabled", "Not compiled in (CONFIG_KEXEC not set)", ColourGreen, 0, nil}
 		}
 	}
 	if isPermissionDenied(err) {
-		return Result{"[-]", "kexec_load Disabled", "Requires root", ColorRed, 2, nil}
+		return Result{"[-]", "kexec_load Disabled", "Requires root", ColourRed, 2, nil}
 	}
-	return Result{"[-]", "kexec_load Disabled", "Could not determine", ColorRed, 2, nil}
+	return Result{"[-]", "kexec_load Disabled", "Could not determine", ColourRed, 2, nil}
 }
 
 func checkUserfaultfd(config map[string]string) Result {
@@ -738,31 +738,31 @@ func checkUserfaultfd(config map[string]string) Result {
 	if err == nil {
 		val := strings.TrimSpace(string(content))
 		if val == "0" {
-			return Result{"[+]", "Unprivileged userfaultfd", "Restricted (0)", ColorGreen, 0, nil}
+			return Result{"[+]", "Unprivileged userfaultfd", "Restricted (0)", ColourGreen, 0, nil}
 		}
-		return Result{"[!]", "Unprivileged userfaultfd", "Allowed (1)", ColorYellow, 1, nil}
+		return Result{"[!]", "Unprivileged userfaultfd", "Allowed (1)", ColourYellow, 1, nil}
 	}
 	// Sysctl missing — check if userfaultfd was compiled out entirely (best outcome)
 	if config != nil {
 		if config["CONFIG_USERFAULTFD"] != "y" {
-			return Result{"[+]", "Unprivileged userfaultfd", "Not compiled in (CONFIG_USERFAULTFD not set)", ColorGreen, 0, nil}
+			return Result{"[+]", "Unprivileged userfaultfd", "Not compiled in (CONFIG_USERFAULTFD not set)", ColourGreen, 0, nil}
 		}
 	}
 	if isPermissionDenied(err) {
-		return Result{"[-]", "Unprivileged userfaultfd", "Requires root", ColorRed, 2, nil}
+		return Result{"[-]", "Unprivileged userfaultfd", "Requires root", ColourRed, 2, nil}
 	}
-	return Result{"[-]", "Unprivileged userfaultfd", "Could not determine", ColorRed, 2, nil}
+	return Result{"[-]", "Unprivileged userfaultfd", "Could not determine", ColourRed, 2, nil}
 }
 
 func checkKernelConfig(found map[string]string, configErr error) {
 	if found == nil {
-		fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColorCyan, ColorReset)
+		fmt.Printf("\n%sKernel Configuration Hardening:%s\n", ColourCyan, ColourReset)
 		fmt.Println("-------------------------------")
 		status := "Could not read /proc/config.gz"
 		if configErr != nil && isPermissionDenied(configErr) {
 			status = "Requires root"
 		}
-		fmt.Printf("%s[-] %-40s: %s%s\n", ColorRed, "Kernel Config Checks", status, ColorReset)
+		fmt.Printf("%s[-] %-40s: %s%s\n", ColourRed, "Kernel Config Checks", status, ColourReset)
 		return
 	}
 
@@ -912,34 +912,34 @@ func checkKernelConfig(found map[string]string, configErr error) {
 	}
 
 	for _, cat := range categories {
-		fmt.Printf("\n%s%s:%s\n", ColorCyan, cat.name, ColorReset)
+		fmt.Printf("\n%s%s:%s\n", ColourCyan, cat.name, ColourReset)
 		fmt.Println(strings.Repeat("-", len(cat.name)+1))
 		var results []Result
 		for _, cfg := range cat.configs {
 			val, ok := found[cfg.key]
 			if ok && val == cfg.expected {
-				results = append(results, Result{"[+]", cfg.key, fmt.Sprintf("Enabled — %s", cfg.desc), ColorGreen, 0, nil})
+				results = append(results, Result{"[+]", cfg.key, fmt.Sprintf("Enabled — %s", cfg.desc), ColourGreen, 0, nil})
 			} else if ok && val != "n" {
-				results = append(results, Result{"[!]", cfg.key, fmt.Sprintf("Set to '%s' — %s", val, cfg.desc), ColorYellow, 1, nil})
+				results = append(results, Result{"[!]", cfg.key, fmt.Sprintf("Set to '%s' — %s", val, cfg.desc), ColourYellow, 1, nil})
 			} else {
-				results = append(results, Result{"[-]", cfg.key, fmt.Sprintf("Not set — %s", cfg.desc), ColorRed, 2, nil})
+				results = append(results, Result{"[-]", cfg.key, fmt.Sprintf("Not set — %s", cfg.desc), ColourRed, 2, nil})
 			}
 		}
 		sortAndPrintResults(results)
 	}
 
 	// Attack Surface Reduction
-	fmt.Printf("\n%sAttack Surface Reduction (should be disabled):%s\n", ColorCyan, ColorReset)
+	fmt.Printf("\n%sAttack Surface Reduction (should be disabled):%s\n", ColourCyan, ColourReset)
 	fmt.Println("----------------------------------------------")
 	var asResults []Result
 	for _, cfg := range attackSurface {
 		val, ok := found[cfg.key]
 		if !ok || val == "n" {
-			asResults = append(asResults, Result{"[+]", cfg.key, fmt.Sprintf("Not set — %s", cfg.desc), ColorGreen, 0, nil})
+			asResults = append(asResults, Result{"[+]", cfg.key, fmt.Sprintf("Not set — %s", cfg.desc), ColourGreen, 0, nil})
 		} else if val == "y" || val == "1" {
-			asResults = append(asResults, Result{"[-]", cfg.key, fmt.Sprintf("Enabled — %s", cfg.desc), ColorRed, 2, nil})
+			asResults = append(asResults, Result{"[-]", cfg.key, fmt.Sprintf("Enabled — %s", cfg.desc), ColourRed, 2, nil})
 		} else {
-			asResults = append(asResults, Result{"[!]", cfg.key, fmt.Sprintf("Set to '%s' — %s", val, cfg.desc), ColorYellow, 1, nil})
+			asResults = append(asResults, Result{"[!]", cfg.key, fmt.Sprintf("Set to '%s' — %s", val, cfg.desc), ColourYellow, 1, nil})
 		}
 	}
 	sortAndPrintResults(asResults)
@@ -950,19 +950,19 @@ func checkSecureBoot() Result {
 	data, err := ioutil.ReadFile(path)
 	if err != nil {
 		if _, err := os.Stat("/sys/firmware/efi"); os.IsNotExist(err) {
-			return Result{"[-]", "Secure Boot", "Not available (Legacy BIOS?)", ColorRed, 2, nil}
+			return Result{"[-]", "Secure Boot", "Not available (Legacy BIOS?)", ColourRed, 2, nil}
 		}
 		status := "Unknown (Could not read efivar)"
 		if isPermissionDenied(err) {
 			status = "Requires root"
 		}
-		return Result{"[?]", "Secure Boot", status, ColorYellow, 1, nil}
+		return Result{"[?]", "Secure Boot", status, ColourYellow, 1, nil}
 	}
 	// First 4 bytes are attributes, 5th byte is value.
 	if len(data) >= 5 && data[4] == 1 {
-		return Result{"[+]", "Secure Boot", "Enabled", ColorGreen, 0, nil}
+		return Result{"[+]", "Secure Boot", "Enabled", ColourGreen, 0, nil}
 	}
-	return Result{"[-]", "Secure Boot", "Disabled", ColorRed, 2, nil}
+	return Result{"[-]", "Secure Boot", "Disabled", ColourRed, 2, nil}
 }
 
 func isPermissionDenied(err error) bool {
@@ -976,14 +976,14 @@ func checkKernelTaint() Result {
 		if isPermissionDenied(err) {
 			status = "Requires root"
 		}
-		return Result{"[?]", "Kernel Integrity", status, ColorRed, 2, nil}
+		return Result{"[?]", "Kernel Integrity", status, ColourRed, 2, nil}
 	}
 
 	var val int
 	fmt.Sscanf(strings.TrimSpace(string(content)), "%d", &val)
 
 	if val == 0 {
-		return Result{"[+]", "Kernel Integrity", "Untainted", ColorGreen, 0, nil}
+		return Result{"[+]", "Kernel Integrity", "Untainted", ColourGreen, 0, nil}
 	}
 
 	var subInfo []string
@@ -1040,7 +1040,7 @@ func checkKernelTaint() Result {
 		Prefix:      "[!]",
 		Description: "Kernel Integrity",
 		Status:      fmt.Sprintf("Tainted (Value: %d)", val),
-		Color:       ColorYellow,
+		Colour:       ColourYellow,
 		SortWeight:  1,
 		SubInfo:     subInfo,
 	}
@@ -1050,10 +1050,10 @@ func checkGnomeHSI() Result {
 	// 1. Try fwupdtool
 	path, err := exec.LookPath("fwupdtool")
 	if err == nil {
-		return Result{"[?]", "GNOME HSI", "Tool found but not implemented", ColorYellow, 1, []string{"fwupdtool is present at " + path}}
+		return Result{"[?]", "GNOME HSI", "Tool found but not implemented", ColourYellow, 1, []string{"fwupdtool is present at " + path}}
 	}
 
-	return Result{"[-]", "GNOME HSI", "Unavailable (fwupdtool not found)", ColorRed, 2, nil}
+	return Result{"[-]", "GNOME HSI", "Unavailable (fwupdtool not found)", ColourRed, 2, nil}
 }
 
 func checkCPUVulnerabilities() Result {
@@ -1066,7 +1066,7 @@ func checkCPUVulnerabilities() Result {
 		} else if isPermissionDenied(err) {
 			status = "Requires root"
 		}
-		return Result{"[-]", "CPU Mitigations", status, ColorRed, 2, nil}
+		return Result{"[-]", "CPU Mitigations", status, ColourRed, 2, nil}
 	}
 
 	var subInfo []string
@@ -1097,24 +1097,24 @@ func checkCPUVulnerabilities() Result {
 	}
 
 	if totalCount == 0 {
-		return Result{"[-]", "CPU Mitigations", "No data found", ColorRed, 2, nil}
+		return Result{"[-]", "CPU Mitigations", "No data found", ColourRed, 2, nil}
 	}
 
 	resStatus := fmt.Sprintf("%d/%d Mitigated", mitigatedCount, totalCount)
-	color := ColorGreen
+	colour := ColourGreen
 	weight := 0
 	prefix := "[+]"
 
 	if vulnerableCount > 0 {
 		resStatus = fmt.Sprintf("%d Vulnerable", vulnerableCount)
-		color = ColorRed
+		colour = ColourRed
 		weight = 2
 		prefix = "[-]"
 	} else if mitigatedCount < totalCount {
-		color = ColorYellow
+		colour = ColourYellow
 		weight = 1
 		prefix = "[!]"
 	}
 
-	return Result{prefix, "CPU Mitigations", resStatus, color, weight, subInfo}
+	return Result{prefix, "CPU Mitigations", resStatus, colour, weight, subInfo}
 }

@@ -82,7 +82,7 @@ go tool cover -func=coverage.out
 go tool cover -html=coverage.out
 ```
 
-The `-coverprofile=FILE` flag records which lines of code are exercised by tests. Use `go tool cover -func` for a quick per-function breakdown, or `-html` for an interactive view that color-codes every line red (untested) or green (tested).
+The `-coverprofile=FILE` flag records which lines of code are exercised by tests. Use `go tool cover -func` for a quick per-function breakdown, or `-html` for an interactive view that colour-codes every line red (untested) or green (tested).
 
 ## 🛠️ Contributing
 
