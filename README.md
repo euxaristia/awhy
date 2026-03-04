@@ -2,7 +2,6 @@
 
 **awhy** is a lightweight, high-performance Linux security mitigation checker written in Go. It quickly audits your system's kernel and runtime configurations to determine if common hardening techniques are active.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Go Version](https://img.shields.io/badge/go-%3E%3D1.16-blue.svg)
 ![Platform](https://img.shields.io/badge/platform-linux-lightgrey.svg)
 
